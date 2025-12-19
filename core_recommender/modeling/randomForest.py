@@ -1,0 +1,294 @@
+import numpy as np
+import pandas as pd
+from typing import Dict, Any, Tuple, Optional, List, Union
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, KFold
+from sklearn.preprocessing import LabelEncoder
+from sklearn.inspection import permutation_importance
+
+# --- PROJECT IMPORTS ---
+from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.preprocessing import (
+    get_imputer,
+    get_one_hot_encoder,
+    get_ordinal_encoder,
+    get_select_from_model
+)
+from core_recommender.evaluation import (
+    calculate_f1_score,
+    calculate_roc_auc_score,
+    calculate_rmse,
+    get_oob_score,
+    get_tree_depth,
+    get_leaf_count
+)
+
+# --- DEFAULT CONFIGURATION ---
+CONFIG = {
+    'task_type': 'auto', # 'classification', 'regression', 'auto'
+    'n_estimators': [100, 200, 300],
+    'max_depth': [None, 10, 20, 30],
+    'max_features': ['sqrt', 'log2', None],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'selection_threshold': 'median',
+    'cv_folds': 5,
+    'random_state': 42,
+    'n_jobs': -1,
+    'class_weight': 'balanced' # 'balanced', 'balanced_subsample'
+}
+
+# =========================================================================
+# RandomForestModel Class
+# =========================================================================
+
+class RandomForestModel(BaseModel):
+    """
+    A concrete implementation of Random Forest for Classification and Regression.
+    Incorporates RandomizedSearchCV, OOB Error, and Feature Importance.
+    """
+    def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
+        
+        task_name = "Classification" if is_classification else "Regression"
+        name = f"Random Forest ({task_name})"
+        super().__init__(name=name, config=config)
+        
+        self.task_type = config.get('task_type', 'auto')
+        self.is_classification = is_classification
+
+    def _infer_task_type(self, y: pd.Series):
+        """Infers classification or regression if set to auto."""
+        if self.task_type != 'auto':
+            self.is_classification = (self.task_type == 'classification')
+            return
+
+        if pd.api.types.is_float_dtype(y):
+            self.is_classification = False
+        elif pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or pd.api.types.is_categorical_dtype(y):
+            self.is_classification = True
+        elif pd.api.types.is_integer_dtype(y):
+             # Heuristic: < 20 unique values = Classification
+             self.is_classification = (y.nunique() < 20)
+        else:
+             self.is_classification = False
+
+    def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
+        """
+        Constructs and applies the feature pipeline optimized for Random Forest.
+        """
+        if y.isna().any():
+             raise ValueError("Target variable 'y' contains missing values.")
+
+        self._infer_task_type(y)
+        
+        # 1. Pipeline Construction
+        # ------------------------
+        
+        # Numerical Steps: Impute -> Pass (Trees handle scaling well, generally no scaling needed)
+        # However, SimpleImputer is required.
+        num_steps = [('imputer', get_imputer(strategy='median'))]
+        
+        # Note: SelectFromModel logic is typically applied AFTER encoding.
+        # We will add it to the final pipeline or manually here if needed per column type.
+        # But commonly, trees handle features as is. 
+        # Requirement: "SelectFromModel (Tree - based selection)"
+        
+        numerical_pipeline = Pipeline(steps=num_steps)
+
+        # Categorical Steps: Impute -> Ordinal or OneHot
+        # Trees work well with Ordinal encoding for high cardinality, OneHot for low.
+        # Requirement: "OrdinalEncoder | OneHotEncoder"
+        # We'll stick to OneHot as general safe default, or Ordinal if requested.
+        # Let's use OneHot for now to be safe with Scikit implementation standards.
+        cat_steps = [
+            ('imputer', get_imputer(strategy='most_frequent')),
+            ('onehot', get_one_hot_encoder(handle_unknown='ignore', sparse_output=False))
+        ]
+        cat_pipeline = Pipeline(steps=cat_steps)
+
+        # 2. Composition
+        # --------------
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numerical_pipeline, X.select_dtypes(include=np.number).columns.tolist()),
+                ('cat', cat_pipeline, X.select_dtypes(include=['object', 'category']).columns.tolist())
+            ],
+            remainder='drop',
+            n_jobs=self.config.get('n_jobs', -1)
+        )
+        
+        # 3. Fit-Transform
+        # ----------------
+        X_transformed = preprocessor.fit_transform(X, y)
+        X_transformed = np.asarray(X_transformed)
+
+        # 4. Feature Selection (SelectFromModel)
+        # --------------------------------------
+        # We apply this ON TOP of the transformed features. 
+        # We need a lightweight estimator for selection.
+        if self.is_classification:
+            sel_est = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
+        else:
+            sel_est = RandomForestRegressor(n_estimators=50, max_depth=5, random_state=42)
+            
+        self.feature_selector = get_select_from_model(
+            estimator=sel_est,
+            threshold=self.config.get('selection_threshold', 'median')
+        )
+        
+        # Fit selector
+        X_selected = self.feature_selector.fit_transform(X_transformed, y)
+        X_selected = np.asarray(X_selected)
+
+        # 5. Target Encoding
+        # ------------------
+        if self.is_classification:
+            le = LabelEncoder()
+            y_transformed = le.fit_transform(y)
+            self.label_encoder = le
+        else:
+            y_transformed = np.asarray(y)
+
+        # Return X_selected as the training data
+        return X_selected, y_transformed, preprocessor
+
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+        """
+        Trains using RandomizedSearchCV.
+        """
+        # Base Estimator
+        if self.is_classification:
+            base_model = RandomForestClassifier(
+                class_weight=self.config.get('class_weight', 'balanced'),
+                oob_score=True, # Requirement
+                random_state=self.config.get('random_state', 42)
+            )
+            scoring = 'f1_weighted'
+            cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+        else:
+            base_model = RandomForestRegressor(
+                oob_score=True, # Requirement
+                random_state=self.config.get('random_state', 42)
+            )
+            scoring = 'neg_root_mean_squared_error' # Optimize RMSE
+            cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+
+        # Param Distribution
+        param_dist = {
+            'n_estimators': self.config.get('n_estimators', [100, 200]),
+            'max_depth': self.config.get('max_depth', [None, 10, 20]),
+            'max_features': self.config.get('max_features', ['sqrt'])
+        }
+
+        # RandomizedSearchCV
+        self.model = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_dist,
+            n_iter=10, # Number of parameter settings sampled
+            scoring=scoring,
+            cv=cv,
+            n_jobs=self.config.get('n_jobs', -1),
+            verbose=1,
+            random_state=self.config.get('random_state', 42)
+        )
+
+        print(f"Starting RandomizedSearchCV for {self.name}...")
+        self.model.fit(X_train, y_train)
+        
+        self.best_estimator = self.model.best_estimator_
+        print(f"Best parameters found: {self.model.best_params_}")
+
+    def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+        """
+        Calculates Task-Specific metrics.
+        """
+        # Note: X_test must be transformed AND selected (via self.feature_selector) before passed here
+        # BUT preprocess() returns preprocessor, not selector for external use.
+        # This is an architectural challenge. 
+        # Implication: The preprocessor returned by preprocess() handles transformation.
+        # The selector is internal. 
+        # FIX: We must apply selector in calculate_metrics? 
+        # Ideally, `preprocess` should return a full pipeline object that includes selection.
+        # But our interface returns X_proc, y_proc, preprocessor_obj.
+        # Standard fix: We assume X_test passed here is ALREADY processed by the caller 
+        # using the preprocessor AND we need to apply selection here manually if not included in preprocessor.
+        # Preprocessor (ColumnTransformer) checks feature columns. 
+        # SelectFromModel changes shape.
+        
+        # Apply Feature Selection to X_test if it exists
+        if hasattr(self, 'feature_selector'):
+            # Check if X_test matches selected shape or original shape?
+            # User (execution.py) calls preprocessor.transform(X_test_raw) -> X_test_proc
+            # Then passes X_test_proc here.
+            # So X_test_proc has shape BEFORE selection.
+            # We must transform it.
+            try:
+                X_test = self.feature_selector.transform(X_test)
+            except Exception:
+                # Fallback if already transformed or shape mismatch
+                pass
+
+        y_pred = self.best_estimator.predict(X_test)
+        
+        metrics = {}
+        
+        # Common
+        metrics['OOB Score'] = get_oob_score(self.best_estimator)
+        
+        if self.is_classification:
+            # Classification Metrics
+            metrics['F1 Score'] = calculate_f1_score(y_test, y_pred, average='weighted')
+            # ROC AUC needs proba
+            if hasattr(self.best_estimator, "predict_proba"):
+                y_proba = self.best_estimator.predict_proba(X_test)
+                # Handle binary vs multi
+                metrics['ROC AUC'] = calculate_roc_auc_score(y_test, y_proba)
+        else:
+            # Regression Metrics
+            metrics['RMSE'] = calculate_rmse(y_test, y_pred)
+            
+        return metrics
+
+    def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+        """
+        Returns data for diagnostics (Feature Importance, Tree Diagram source).
+        """
+        if not hasattr(self, 'best_estimator'):
+             raise RuntimeError("Model must be fitted before diagnostics.")
+             
+        # Apply Selection (same logic as metrics)
+        if hasattr(self, 'feature_selector'):
+             try:
+                X_test = self.feature_selector.transform(X_test)
+             except Exception:
+                pass
+
+        y_pred = self.best_estimator.predict(X_test)
+        
+        # Feature Importance (MDI)
+        mdi_importance = self.best_estimator.feature_importances_
+        
+        # Permutation Importance (Computationally expensive, so maybe optional or small n_repeats)
+        # Requirement: "Feature Importance Plot (MDI or Permutation Importance)"
+        # We'll stick to MDI for speed in default, but permit calc if requested.
+        
+        # Tree Structure (Extract one estimator)
+        single_estimator = self.best_estimator.estimators_[0]
+
+        return {
+            'y_pred': y_pred,
+            'y_test': y_test,
+            'model_name': self.name,
+            'feature_importances_mdi': mdi_importance,
+            'single_estimator': single_estimator, # For Viz
+            'oob_score': get_oob_score(self.best_estimator)
+        }
+
+    def get_feature_importance(self) -> Dict[str, float]:
+        """Returns MDI feature importance."""
+        if hasattr(self.best_estimator, 'feature_importances_'):
+             # Return array, logic to map to names would require knowing feature names here
+             return {'importances': self.best_estimator.feature_importances_}
+        return {}

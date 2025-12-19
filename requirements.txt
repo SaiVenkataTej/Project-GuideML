@@ -1,0 +1,19 @@
+# Core Data Handling and Numerical Operations
+pandas
+numpy
+
+# Machine Learning Core
+scikit-learn
+
+# Concurrency and Model Serialization (Crucial for F6, F7)
+joblib
+
+# Visualization Libraries (For F9, F10: Heatmap, ROC, Confusion Matrix)
+matplotlib
+seaborn
+
+# Local UI/Web Framework (If using Flask for the local server)
+Flask
+
+# Statistical utilities (For Q-Q Plots)
+scipy
