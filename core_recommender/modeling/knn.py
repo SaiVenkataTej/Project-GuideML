@@ -4,8 +4,9 @@ from typing import Dict, Any, Tuple, Optional, List
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.model_selection import StratifiedKFold, KFold, GridSearchCV
+from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score
 from sklearn.preprocessing import LabelEncoder
+import optuna
 import time
 
 # --- PROJECT IMPORTS ---
@@ -173,43 +174,79 @@ class KNNModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the KNN model using GridSearchCV for hyperparameter tuning.
-        
-        It optimally selects 'n_neighbors', 'weights', and 'metric' using Cross-Validation.
+        Trains the KNN model using the configured optimization strategy.
+        Delegates to core_recommender.tuning for modular execution.
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
+        from core_recommender.tuning import (
+            get_grid_search_tuner, 
+            run_optuna_optimization
+        )
+
+        # 1. Setup Cross-Validation
         if self.is_classification:
-            cv = StratifiedKFold( # Stratified K-Fold (Req)
+            cv = StratifiedKFold(
                 n_splits=self.config.get('cv_folds', 5),
                 shuffle=True,
                 random_state=self.config.get('random_state', 42)
             )
-            scoring = 'accuracy' # Optimize for Accuracy 
+            scoring = 'accuracy'
         else:
             cv = KFold(
                 n_splits=self.config.get('cv_folds', 5),
                 shuffle=True,
                 random_state=self.config.get('random_state', 42)
             )
-            scoring = 'neg_mean_absolute_error' # Optimize for MAE (Req)
+            scoring = 'neg_mean_absolute_error'
 
-        self.model = GridSearchCV( # GridSearchCV (Req)
-            estimator=self.model_instance,
-            param_grid=self.param_grid,
-            scoring=scoring,
-            cv=cv,
-            n_jobs=self.config.get('n_jobs', -1),
-            verbose=1
-        )
+        # 2. Select & Run Strategy
+        strategy = self.config.get('tuning_strategy', 'optuna')
+        print(f"[{self.name}] Starting Training with {strategy.upper()} strategy...")
 
-        print(f"[{self.name}] Starting GridSearchCV...")
-        self.model.fit(X_train, y_train)
+        if strategy == 'optuna':
+            # Use the functional executor from tuning.py
+            self.best_estimator = run_optuna_optimization(
+                estimator_class=KNeighborsClassifier if self.is_classification else KNeighborsRegressor,
+                param_space_func=self._get_optuna_space,
+                X=X_train,
+                y=y_train,
+                cv=cv,
+                scoring=scoring,
+                n_trials=self.config.get('n_trials', 20),
+                n_jobs=self.config.get('n_jobs', -1),
+                random_state=self.config.get('random_state', 42)
+            )
+            if hasattr(self.best_estimator, 'study_'):
+                 self.study = self.best_estimator.study_
+
+        elif strategy == 'grid':
+            # Use the factory from tuning.py
+            grid_search = get_grid_search_tuner(
+                estimator=self.model_instance,
+                param_grid=self.param_grid,
+                cv=cv,
+                scoring=scoring,
+                n_jobs=self.config.get('n_jobs', -1)
+            )
+            grid_search.fit(X_train, y_train)
+            self.best_estimator = grid_search.best_estimator_
+            self.model = grid_search # For accessing cv_results_ if needed
+
+        self.model = self.best_estimator
+
+    def _get_optuna_space(self, trial):
+        """Defines the search space for Optuna."""
+        neighbors_conf = self.param_grid.get('n_neighbors', [3, 5, 7])
+        n_min, n_max = min(neighbors_conf), max(neighbors_conf)
         
-        self.best_estimator = self.model.best_estimator_
-        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
+        return {
+            'n_neighbors': trial.suggest_int('n_neighbors', n_min, max(n_max, 15)),
+            'weights': trial.suggest_categorical('weights', self.param_grid.get('weights', ['uniform', 'distance'])),
+            'metric': trial.suggest_categorical('metric', self.param_grid.get('metric', ['euclidean']))
+        }
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
@@ -251,20 +288,7 @@ class KNNModel(BaseModel):
         """
         Retrieves diagnostic data for visualization.
         
-        Includes:
-        - Predictions and Truth values
-        - Elbow Plot data (Error vs. K)
-        - Local Neighbor Inspection data (indices and distances)
-        
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, Any]: Data dictionary for the visualization module.
-            
-        Raises:
-            RuntimeError: If the model has not been trained yet.
+        Includes data from Optuna study if available.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -276,23 +300,42 @@ class KNNModel(BaseModel):
         # Find neighbors for a few test samples (first 5)
         distances, indices = self.best_estimator.kneighbors(X_test[:5])
 
-        # Elbow Plot Data (Error vs K) from GridSearchCV results
-        # accessing cv_results_
-        results_df = pd.DataFrame(self.model.cv_results_)
-        # Filter for relevant columns
-        elbow_data = results_df[['param_estimator__n_neighbors', 'mean_test_score', 'std_test_score']]
-        # Group by neighbor count if multiple other params
-        # But we also have weights/metric. 
-        # Ideally, we show the curve for the BEST other params.
+        # Elbow Plot Data (for Visualization)
+        elbow_data = []
+        best_k = None
         
+        if hasattr(self, 'study'):
+            trials_df = self.study.trials_dataframe()
+            # Visualize Score vs n_neighbors
+            if 'params_n_neighbors' in trials_df.columns:
+                elbow_df = trials_df[['params_n_neighbors', 'value']].rename(
+                    columns={'params_n_neighbors': 'param_estimator__n_neighbors', 'value': 'mean_test_score'}
+                )
+                elbow_df['std_test_score'] = 0.0 
+                elbow_data = elbow_df.sort_values(by='param_estimator__n_neighbors').to_dict(orient='records')
+            
+            best_k = self.study.best_params.get('n_neighbors')
+        
+        # If using GridSearch (fallback or explicit choice)
+        elif hasattr(self.model, 'cv_results_'):
+             results_df = pd.DataFrame(self.model.cv_results_)
+             # Ensure 'param_estimator__n_neighbors' is present, or adapt if param_grid keys are used directly
+             if 'param_n_neighbors' in results_df.columns: # For GridSearch, params are usually prefixed with 'param_'
+                 elbow_df = results_df[['param_n_neighbors', 'mean_test_score', 'std_test_score']].rename(
+                     columns={'param_n_neighbors': 'param_estimator__n_neighbors'}
+                 )
+                 elbow_data = elbow_df.sort_values(by='param_estimator__n_neighbors').to_dict(orient='records')
+             best_k = self.model.best_params_.get('n_neighbors')
+
+
         return {
             'y_pred': y_pred,
             'y_test': y_test,
             'model_name': self.name,
-            'elbow_data': elbow_data.to_dict(orient='records'),
+            'elbow_data': elbow_data,
             'neighbor_indices': indices.tolist(),
             'neighbor_distances': distances.tolist(),
-            'best_k': self.model.best_params_.get('estimator__n_neighbors')
+            'best_k': best_k
         }
     
     def get_feature_importance(self) -> Dict[str, float]:

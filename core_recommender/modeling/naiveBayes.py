@@ -181,22 +181,21 @@ class NaiveBayesModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the Naive Bayes model using GridSearchCV for hyperparameter tuning.
-        
-        It utilizes Stratified K-Fold Cross-Validation to optimize smoothing parameters 
-        ('var_smoothing' for Gaussian, 'alpha' for Multinomial).
+        Trains the Naive Bayes model using GridSearchCV (Tier 1) via factory.
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
+        from core_recommender.tuning import get_grid_search_tuner
+
         cv = StratifiedKFold(
             n_splits=self.config.get('cv_folds', 5),
             shuffle=True,
             random_state=self.config.get('random_state', 42)
         )
 
-        self.model = GridSearchCV(
+        self.model = get_grid_search_tuner(
             estimator=self.model_instance,
             param_grid=self.param_grid,
             scoring='f1_weighted',
@@ -205,11 +204,11 @@ class NaiveBayesModel(BaseModel):
             verbose=1
         )
 
-        print(f"Starting GridSearchCV for {self.name}...")
+        print(f"[{self.name}] Starting GridSearchCV (Tier 1)...")
         self.model.fit(X_train, y_train)
         
         self.best_estimator = self.model.best_estimator_
-        print(f"Best parameters found: {self.model.best_params_}")
+        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """

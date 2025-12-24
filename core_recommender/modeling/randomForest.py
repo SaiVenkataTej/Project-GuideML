@@ -185,56 +185,80 @@ class RandomForestModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the Random Forest model using RandomizedSearchCV for hyperparameter optimization.
-        
-        It utilizes Cross-Validation to find the best configuration for tree density, 
-        depth, and split criteria.
+        Trains the Random Forest model using Optuna (Tier 3) tuning strategy.
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
-        # Base Estimator
+        from core_recommender.tuning import run_optuna_optimization
+
+        # 1. Base Strategy
         if self.is_classification:
-            base_model = RandomForestClassifier(
-                class_weight=self.config.get('class_weight', 'balanced'),
-                oob_score=True, # Requirement
-                random_state=self.config.get('random_state', 42)
-            )
+            base_cls = RandomForestClassifier
             scoring = 'f1_weighted'
             cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
         else:
-            base_model = RandomForestRegressor(
-                oob_score=True, # Requirement
-                random_state=self.config.get('random_state', 42)
-            )
-            scoring = 'neg_root_mean_squared_error' # Optimize RMSE
+            base_cls = RandomForestRegressor
+            scoring = 'neg_root_mean_squared_error'
             cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
 
-        # Param Distribution
-        param_dist = {
-            'n_estimators': self.config.get('n_estimators', [100, 200]),
-            'max_depth': self.config.get('max_depth', [None, 10, 20]),
-            'max_features': self.config.get('max_features', ['sqrt'])
-        }
-
-        # RandomizedSearchCV
-        self.model = RandomizedSearchCV(
-            estimator=base_model,
-            param_distributions=param_dist,
-            n_iter=10, # Number of parameter settings sampled
-            scoring=scoring,
+        # 2. Run Optuna
+        print(f"[{self.name}] Starting Training with OPTUNA strategy...")
+        
+        self.best_estimator = run_optuna_optimization(
+            estimator_class=base_cls,
+            param_space_func=self._get_optuna_space,
+            X=X_train,
+            y=y_train,
             cv=cv,
+            scoring=scoring,
+            n_trials=self.config.get('n_trials', 20),
             n_jobs=self.config.get('n_jobs', -1),
-            verbose=1,
             random_state=self.config.get('random_state', 42)
         )
+        # Capture study
+        if hasattr(self.best_estimator, 'study_'):
+            self.study = self.best_estimator.study_
 
-        print(f"Starting RandomizedSearchCV for {self.name}...")
-        self.model.fit(X_train, y_train)
+        self.model = self.best_estimator
+        print(f"[{self.name}] Best parameters: {self.study.best_params if hasattr(self, 'study') else 'N/A'}")
+
+    def _get_optuna_space(self, trial):
+        """Defines the search space for Random Forest."""
+        # Config defaults
+        n_est_range = self.config.get('n_estimators', [100, 300])
+        n_est = trial.suggest_int('n_estimators', min(n_est_range), max(n_est_range))
         
-        self.best_estimator = self.model.best_estimator_
-        print(f"Best parameters found: {self.model.best_params_}")
+        depth_conf = self.config.get('max_depth', [10, 30])
+        # Filter None for ranges (if config has None, replace with generic high int like 50)
+        depth_vals = [d for d in depth_conf if d is not None]
+        if not depth_vals: depth_vals = [10, 50]
+        max_depth = trial.suggest_int('max_depth', min(depth_vals), max(depth_vals))
+        
+        # Determine max_features space 
+        # (Optuna suggests categorical from list, but Scikit RF accepts specific strings or ints)
+        max_feat_options = [f for f in self.config.get('max_features', ['sqrt', 'log2']) if f is not None]
+        max_features = trial.suggest_categorical('max_features', max_feat_options if max_feat_options else ['sqrt'])
+        
+        # Min samples (critical for pruning trees)
+        min_samples_split = trial.suggest_int('min_samples_split', 2, 10)
+        min_samples_leaf = trial.suggest_int('min_samples_leaf', 1, 4)
+
+        base_params = {
+            'n_estimators': n_est,
+            'max_depth': max_depth,
+            'max_features': max_features,
+            'min_samples_split': min_samples_split,
+            'min_samples_leaf': min_samples_leaf,
+            'random_state': self.config.get('random_state', 42),
+            'oob_score': True # Keep this enabled
+        }
+        
+        if self.is_classification:
+            base_params['class_weight'] = self.config.get('class_weight', 'balanced')
+            
+        return base_params
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """

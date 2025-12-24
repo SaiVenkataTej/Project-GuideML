@@ -41,7 +41,7 @@
 | Ridge(L2) | Regularization |
 | Lasso(L1) | Regularization |
 | ElasticNet | Regularization |
-| GridSearch CV (`alpha`, `l1_ratio`) | Hyper Parameter Optimization |
+| GridSearch CV (`alpha`, `l1_ratio`) | Hyper Parameter Optimization (Tier 1: Basic) |
 
 ---
 
@@ -103,7 +103,7 @@
 | :--- | :--- |
 | Stratified K - Fold | Cross - Validation |
 | Class Weights ('balanced') | Imbalance |
-| GridSearch CV (`C`, `penalty`, `solver`) | Hyper Parameter Optimization |
+| GridSearch CV (`C`, `penalty`, `solver`) | Hyper Parameter Optimization (Tier 1: Basic) |
 
 ---
 
@@ -166,7 +166,7 @@
 | :--- | :--- |
 | Stratified K - Fold | Cross - Validation |
 | Class Priors Adjustment | Imbalance |
-| GridSearch CV (`var_smoothing` for Gaussian, `alpha` for multinomial) | Hyper Parameter Optimization |
+| GridSearch CV (`var_smoothing` for Gaussian, `alpha` for multinomial) | Hyper Parameter Optimization (Tier 1: Basic) |
 
 ---
 
@@ -226,7 +226,7 @@
 | Stratified K - Fold (Classification) | Cross-Validation |
 | K - Fold (Regression) | Cross- Validation |
 | Class Weights (`balanced` or `balanced_subsample`) | Imbalance |
-| Randomized Search CV (`n_estimators`, `max_depth`, `max_features`) | Hyper Parameter Optimization |
+| Optuna (Bayesian Optimization) (`n_estimators`, `max_depth`, `max_features`) | Hyper Parameter Optimization (Tier 3: Advanced) |
 
 ---
 
@@ -285,7 +285,7 @@
 | :--- | :--- |
 | Stratified K-Fold | Cross - Validation |
 | Class Wrights (`balanced`) | Imbalance |
-| Randomized Search CV(`C`, `gamma`, `kernel`) | Hyper Parameter Optimization |
+| Optuna (Bayesian Optimization) (`C`, `gamma`, `kernel`) | Hyper Parameter Optimization (Tier 3: Advanced) |
 
 ---
 
@@ -343,7 +343,7 @@
 | :--- | :--- |
 | Stratified K - Fold | Cross - Validation  |
 | Cost-Complexity Pruning (CCP) | Optimization|
-| GridSearchCV (`maxDepth`, `min_samples_split`, `min_samples_leaf`) | Hyper Parameter Optimization |
+| randomized Search CV (`maxDepth`, `min_samples_split`, `min_samples_leaf`) | Hyper Parameter Optimization (Tier 2: Intermediate) |
 
 ---
 
@@ -404,7 +404,7 @@
 | :--- | :--- |
 | Stratified K-Fold | Cross - Validation|
 | Distance Weighting | Optimization |
-| GridSearchCV |Hyper Parameter Optimization |
+| Randomized / Halving Search CV | Hyper Parameter Optimization (Tier 2: Intermediate) |
 | Class adjustments | For classification |
 
 ---
@@ -482,8 +482,11 @@ These techniques deal directly with the model fitting process, stability, parame
 
 ### **Hyperparameter Optimization (HPO)**:
 
-* GridSearch CV (with model-specific parameters like alpha, C, gamma, maxDepth, etc.)
-* Randomized Search CV
+| Technique Names | Strategy Tier |
+| :--- | :--- |
+| GridSearch CV (for simpler models) | Tier 1: Basic Strategy |
+| Randomized / Halving Search CV (for medium complexity) | Tier 2: Intermediate Strategy |
+| Optuna (Bayesian Optimization) (for complex models) | Tier 3: Advanced Strategy |
 
 ### **Imbalance Handling**:
 

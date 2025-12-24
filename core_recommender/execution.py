@@ -10,7 +10,6 @@ from core_recommender.modeling.baseModel import BaseModel
 from core_recommender.modeling.knn import KNNModel
 from core_recommender.modeling.linearRegression import LinearRegressionModel
 from core_recommender.modeling.logisticRegression import LogisticRegressionModel
-# Future imports:
 from core_recommender.modeling.randomForest import RandomForestModel
 from core_recommender.modeling.decisionTrees import DecisionTreeModel
 from core_recommender.modeling.svms import SVMModel
@@ -33,7 +32,7 @@ class ModelExecutor:
     6. Generate Diagnostics (Confusion Matrix, Plots, etc.)
     """
     
-    def __init__(self, task_type: str = 'auto', n_jobs: int = -1, random_state: int = 42):
+    def __init__(self, task_type: str = 'auto', n_jobs: int = 1, random_state: int = 42):
         """
         Initializes the ModelExecutor.
 
@@ -43,7 +42,9 @@ class ModelExecutor:
                        - 'regression': Force regression mode.
                        - 'auto': Infer from the target variable (default).
             n_jobs: Number of parallel jobs for training models. 
-                    -1 for using all available cores. Defaults to -1.
+                    Defaults to 1 (Sequential) to avoid nested parallelism issues, 
+                    since individual models already use all cores.
+                    Set to -1 only if models are single-threaded.
             random_state: Seed for reproducibility across splits and models. Defaults to 42.
         """
         self.task_type = task_type

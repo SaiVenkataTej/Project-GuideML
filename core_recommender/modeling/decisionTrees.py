@@ -172,15 +172,14 @@ class DecisionTreeModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the Decision Tree model using GridSearchCV for hyperparameter tuning.
-        
-        It utilizes Cross-Validation (StratifiedKFold for classification, KFold for regression)
-        to find the best parameters from the defined `param_grid`.
+        Trains the Decision Tree model using RandomizedSearchCV (Tier 2).
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
+        from core_recommender.tuning import get_random_search_tuner
+
         if self.is_classification:
             cv = StratifiedKFold( # Stratified K-Fold (Req)
                 n_splits=self.config.get('cv_folds', 5),
@@ -196,16 +195,20 @@ class DecisionTreeModel(BaseModel):
             )
             scoring = 'neg_root_mean_squared_error'
 
-        self.model = GridSearchCV( # GridSearchCV (Req)
+        # Tier 2: Randomized Search
+        # Uses param_grid as distribution (RandomizedSearchCV accepts list of values)
+        # Note: Scikit's RandomizedSearchCV accepts a dict of lists just fine (samples uniformly).
+        self.model = get_random_search_tuner(
             estimator=self.model_instance,
-            param_grid=self.param_grid,
-            scoring=scoring,
+            param_distributions=self.param_grid,
             cv=cv,
+            scoring=scoring,
+            n_iter=self.config.get('n_iter', 10), # Default 10 samples
             n_jobs=self.config.get('n_jobs', -1),
-            verbose=1
+            random_state=self.config.get('random_state', 42)
         )
 
-        print(f"[{self.name}] Starting GridSearchCV...")
+        print(f"[{self.name}] Starting RandomizedSearchCV (Tier 2)...")
         self.model.fit(X_train, y_train)
         
         self.best_estimator = self.model.best_estimator_

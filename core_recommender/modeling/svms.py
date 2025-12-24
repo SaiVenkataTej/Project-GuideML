@@ -162,46 +162,82 @@ class SVMModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the SVM model using RandomizedSearchCV for hyperparameter tuning.
-        
-        It optimizes 'C', 'kernel', and 'gamma' using Cross-Validation to find the best 
-        decision boundary.
+        Trains the SVM model using Optuna (Tier 3) tuning strategy.
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
-        if self.is_classification:
-            cv = StratifiedKFold( # Stratified K-Fold (Req)
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
-            scoring = 'f1_weighted'
-        else:
-            cv = KFold(
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
-            scoring = 'neg_root_mean_squared_error'
+        from core_recommender.tuning import run_optuna_optimization
 
-        self.model = RandomizedSearchCV( # Randomized Search CV (Req)
-            estimator=self.model_instance,
-            param_distributions=self.param_distributions,
-            n_iter=self.config.get('n_iter', 10),
-            scoring=scoring,
+        # 1. Base Strategy
+        if self.is_classification:
+            base_cls = SVC
+            # using 'accuracy' or 'f1_weighted' depending on preference. 
+            # Config defaulted RandomizedSearch to f1_weighted.
+            scoring = 'f1_weighted' 
+            cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+        else:
+            base_cls = SVR
+            scoring = 'neg_root_mean_squared_error'
+            cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+
+        # 2. Run Optuna
+        print(f"[{self.name}] Starting Training with OPTUNA strategy...")
+        
+        self.best_estimator = run_optuna_optimization(
+            estimator_class=base_cls,
+            param_space_func=self._get_optuna_space,
+            X=X_train,
+            y=y_train,
             cv=cv,
+            scoring=scoring,
+            n_trials=self.config.get('n_iter', 20), # Use n_iter config as n_trials for Optuna
             n_jobs=self.config.get('n_jobs', -1),
-            verbose=1,
             random_state=self.config.get('random_state', 42)
         )
-
-        print(f"[{self.name}] Starting RandomizedSearchCV...")
-        self.model.fit(X_train, y_train)
         
-        self.best_estimator = self.model.best_estimator_
-        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
+        # Capture study
+        if hasattr(self.best_estimator, 'study_'):
+            self.study = self.best_estimator.study_
+
+        self.model = self.best_estimator
+        print(f"[{self.name}] Best parameters: {self.study.best_params if hasattr(self, 'study') else 'N/A'}")
+
+    def _get_optuna_space(self, trial):
+        """Defines the search space for SVM."""
+        # Kernels
+        k_options = self.config.get('kernel', ['linear', 'rbf'])
+        kernel = trial.suggest_categorical('kernel', k_options)
+        
+        # C (Regularization) - Log scale is crucial for C
+        c_range = self.config.get('C', [0.1, 100])
+        # If user passed a list [0.1, 1, 10, 100], finding min/max for range log search
+        c_min, c_max = min(c_range), max(c_range)
+        C = trial.suggest_float('C', c_min, c_max, log=True)
+        
+        # Gamma (Kernel coeff)
+        # Svc accepts 'scale', 'auto' OR float. Optuna needs categorical or float.
+        # We can mix them by suggesting a string from categorical, and if it's not scale/auto, treat as float?
+        # Actually, standard practice: usually 'scale' or 'auto' are good enough. 
+        # If we really want to tune gamma float value, we need a separate float range.
+        # For simplicity/robustness similar to previous RandomizedSearch config which had ['scale', 'auto']
+        gamma_options = [g for g in self.config.get('gamma', ['scale', 'auto']) if isinstance(g, str)]
+        if not gamma_options: gamma_options = ['scale'] # Fallback
+        gamma = trial.suggest_categorical('gamma', gamma_options)
+
+        params = {
+            'C': C,
+            'kernel': kernel,
+            'gamma': gamma
+        }
+        
+        if self.is_classification:
+            params['class_weight'] = 'balanced'
+            params['probability'] = True # For diagnostics (ROC)
+            params['random_state'] = self.config.get('random_state', 42)
+            
+        return params
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
@@ -210,13 +246,6 @@ class SVMModel(BaseModel):
         Metrics Include:
         - Accuracy, F1 Score (Classification)
         - RMSE, R2 Score (Regression)
-
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         
@@ -233,31 +262,16 @@ class SVMModel(BaseModel):
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
         Retrieves diagnostic data for visualization.
-        
-        Includes:
-        - Predictions and Probabilities
-        - Support Vectors (for boundary inspection)
-        
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, Any]: Data dictionary for the visualization module.
-            
-        Raises:
-            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
-
+        
         y_pred = self.best_estimator.predict(X_test)
         
         data = {
             'y_pred': y_pred,
             'y_test': y_test,
             'model_name': self.name,
-            # Support Vectors (Req: Inspection purposes)
             'support_vectors': self.best_estimator.support_vectors_,
             'n_support': self.best_estimator.n_support_ if hasattr(self.best_estimator, 'n_support_') else None,
             'is_classification': self.is_classification
@@ -271,15 +285,11 @@ class SVMModel(BaseModel):
     def get_feature_importance(self) -> Dict[str, float]:
         """
         Retrieves feature importance (Coefficients) for Linear kernel SVMs only.
-        
-        Returns:
-            Dict[str, float]: Dictionary mapping feature indices to coefficients for Linear SVM. 
-                              Empty for RBF/Poly kernels.
         """
-        if self.model.best_params_['estimator__kernel'] == 'linear':
+        # Check kernel on the fitted estimator instance directly
+        if getattr(self.best_estimator, 'kernel', '') == 'linear':
             if hasattr(self.best_estimator, 'coef_'):
-                # Handle multi-class case? coef_ shape (n_classes, n_features)
-                # Just return raw or mean abs?
-                # For simplicity, returning empty or first class if binary.
-                 return {} # Complex to map back to features generally here without column names context
+                 # Returning raw coefs not super useful without feature names & multi-class handling
+                 # But keeping generic as requested
+                 return {'coef_': self.best_estimator.coef_}
         return {}

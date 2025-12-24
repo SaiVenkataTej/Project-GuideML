@@ -179,15 +179,14 @@ class LinearRegressionModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains the Linear Regression model using GridSearchCV for hyperparameter tuning.
-        
-        It optimally selects 'alpha' and 'l1_ratio' using K-Fold Cross-Validation 
-        to balance bias and variance (handling both Ridge and Lasso constraints).
+        Trains the Linear Regression model using GridSearchCV (Tier 1) via factory.
         
         Args:
             X_train: Training features array.
             y_train: Training target array.
         """
+        from core_recommender.tuning import get_grid_search_tuner
+
         # K-Fold Cross Validation (Shuffle=True)
         cv_strategy = KFold(
             n_splits=self.config.get('cv_folds', 5), 
@@ -196,20 +195,20 @@ class LinearRegressionModel(BaseModel):
         )
 
         # GridSearch
-        self.model = GridSearchCV(
+        self.model = get_grid_search_tuner(
             estimator=self.model_instance,
             param_grid=self.param_grid,
-            scoring='neg_mean_squared_error', # Optimize for RMSE (negative MSE)
+            scoring='neg_mean_squared_error',
             cv=cv_strategy,
             n_jobs=self.config.get('n_jobs', -1),
             verbose=1
         )
 
-        print(f"Starting GridSearchCV for {self.name}...")
+        print(f"[{self.name}] Starting GridSearchCV (Tier 1)...")
         self.model.fit(X_train, y_train)
         
         self.best_estimator = self.model.best_estimator_
-        print(f"Best parameters found: {self.model.best_params_}")
+        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """

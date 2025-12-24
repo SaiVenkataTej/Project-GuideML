@@ -80,7 +80,7 @@ def process():
         plot_feature_histograms(df, numeric_cols[:6], save_path=hist_path)
 
         # 4. Run Model Pipeline
-        executor = ModelExecutor(task_type='auto', n_jobs=-1) 
+        executor = ModelExecutor(task_type='auto', n_jobs=1) 
         results = executor.run(df, target_column=target_column)
         
         # 5. Generate Diagnostic Plots for Best Model

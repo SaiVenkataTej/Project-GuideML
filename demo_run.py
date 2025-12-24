@@ -33,7 +33,7 @@ def run_classification_demo():
     
     # 2. Initialize Executor
     print("Initializing ModelExecutor...")
-    executor = ModelExecutor(task_type='classification', n_jobs=2) # n_jobs=2 to test parallelism
+    executor = ModelExecutor(task_type='classification', n_jobs=1) # n_jobs=1 for safe sequential execution
     
     # 3. Run
     print("Running execution engine...")
@@ -77,7 +77,7 @@ def run_regression_demo():
     
     # 2. Initialize Executor
     print("Initializing ModelExecutor...")
-    executor = ModelExecutor(task_type='regression', n_jobs=2)
+    executor = ModelExecutor(task_type='regression', n_jobs=1)
     
     # 3. Run
     print("Running execution engine...")
