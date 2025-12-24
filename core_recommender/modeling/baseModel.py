@@ -14,11 +14,18 @@ class BaseModel(ABC):
     for all Machine Learning models in the GuideML recommender pipeline. 
     
     This class enforces modularity and ensures that concurrency orchestrators 
-    (Joblib) can treat all model objects uniformly.
+    (Joblib) can treat all model objects uniformly. Each model must implement
+    key methods like `fit`, `preprocess`, and `calculate_metrics`.
     """
     
     def __init__(self, name: str, config: Dict[str, Any]):
-        """Initializes the base model, storing its name and configuration."""
+        """
+        Initializes the base model, storing its name and configuration.
+
+        Args:
+            name: A unique identifier for the model (e.g., 'RandomForest').
+            config: A dictionary containing configuration parameters (hyperparameters, etc.).
+        """
         self.name = name
         self.config = config
         self.model = None  # Placeholder for the Scikit-learn model instance
@@ -35,15 +42,16 @@ class BaseModel(ABC):
         Prepares the data specifically for this model.
 
         Used for feature engineering, scaling, encoding, handling missing 
-        values, etc
+        values, etc.
 
         This method will call imported, granular functions from the 
         preprocessing.py module (F5).
         
         Args:
             data: The raw or partially processed DataFrame.
+            
         Returns:
-            The final feature array ready for the model.
+            np.ndarray: The final feature array ready for the model.
         """
         pass # Concrete models must define this logic
 
@@ -52,7 +60,8 @@ class BaseModel(ABC):
         """
         Trains the specific Scikit-learn model instance.
         
-        This method must incorporate logic for k-fold cross-validation (F6).
+        This method must incorporate logic for k-fold cross-validation (F6)
+        and hyperparameter tuning if applicable.
         
         Args:
             X_train: Training features array.
@@ -66,6 +75,13 @@ class BaseModel(ABC):
         Calculates and returns a dictionary of performance metrics (F8).
         
         This method must call imported, granular functions from evaluation.py.
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Key-value pairs of metric names and their scores.
         """
         pass
 
@@ -74,6 +90,13 @@ class BaseModel(ABC):
         """
         Retrieves the necessary data (predictions, probabilities) for generating 
         visualization plots (ROC, Confusion Matrix) (F9, F10).
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+
+        Returns:
+            Dict[str, Any]: Diagnositic data required by `visualization.py`.
         """
         pass
 
@@ -81,6 +104,9 @@ class BaseModel(ABC):
     def get_feature_importance(self) -> Dict[str, float]:
         """
         Retrieves the feature importance scores from the model, if supported (F9).
+
+        Returns:
+            Dict[str, float]: Map of feature names to importance scores.
         """
         pass
     # ---------------------------------------------------------------------
@@ -93,6 +119,9 @@ class BaseModel(ABC):
         
         Args:
             filepath: The full path and filename for the exported model.
+        
+        Raises:
+            ValueError: If the model has not been trained yet.
         """
         if self.model is None:
             raise ValueError("Cannot export model: Model has not been trained (fit) yet.")

@@ -44,23 +44,34 @@ CONFIG = {
 class NaiveBayesModel(BaseModel):
     """
     A concrete implementation of Naive Bayes (Gaussian, Multinomial) for Classification.
+    
+    This model assumes independence between predictors. It is highly efficient and scalable, 
+    often serving as a strong baseline for text classification and other high-dimensional tasks.
+    Gaussian NB is used for continuous features, while Multinomial NB is suited for counts.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the Naive Bayes model.
+
+        Args:
+            config: Dictionary containing hyperparameters (e.g., 'model_type', 'var_smoothing', 'alpha').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         name = f"Naive Bayes ({config.get('model_type', 'gaussian').capitalize()})"
         super().__init__(name=name, config=config)
         
         self.model_type = config.get('model_type', 'gaussian')
         
-        # Initialize Model Instance
+        # Initialize Model Instance based on type
         if self.model_type == 'gaussian':
-            # var_smoothing will be grid searched
+            # var_smoothing will be grid searched (handles numerical stability)
             self.model_instance = GaussianNB()
             self.param_grid = {
-                'var_smoothing': np.logspace(0, -9, num=10)
+                'var_smoothing': np.logspace(0, -9, num=10) 
             }
         elif self.model_type == 'multinomial':
-            # alpha will be grid searched
+            # alpha (smoothing parameter) will be grid searched
             self.model_instance = MultinomialNB()
             self.param_grid = {
                 'alpha': [0.01, 0.1, 0.5, 1.0, 5.0, 10.0]
@@ -71,6 +82,24 @@ class NaiveBayesModel(BaseModel):
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for Naive Bayes.
+        
+        Pipeline Steps:
+        1. Numerical (Gaussian): Mean imputation. Yeo-Johnson transformation (to Gaussianize). Scaling.
+        2. Numerical (Multinomial): Median imputation. MinMax Scaling (ensure non-negative).
+        3. Categorical: Most frequent imputation. One-Hot encoding.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
+            
+        Raises:
+            ValueError: If target variable 'y' contains NaNs.
         """
         # Check for NaNs object target
         if y.isna().any():
@@ -152,7 +181,14 @@ class NaiveBayesModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using Stratified K-Fold CV and GridSearchCV.
+        Trains the Naive Bayes model using GridSearchCV for hyperparameter tuning.
+        
+        It utilizes Stratified K-Fold Cross-Validation to optimize smoothing parameters 
+        ('var_smoothing' for Gaussian, 'alpha' for Multinomial).
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         cv = StratifiedKFold(
             n_splits=self.config.get('cv_folds', 5),
@@ -177,7 +213,20 @@ class NaiveBayesModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates Accuracy, F1, Log Loss, Precision.
+        Calculates standard classification performance metrics.
+
+        Metrics Include:
+        - Accuracy
+        - F1 Score (weighted)
+        - Precision (weighted)
+        - Log Loss
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         y_proba = self.best_estimator.predict_proba(X_test)
@@ -192,7 +241,21 @@ class NaiveBayesModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for Confusion Matrix, Histograms, etc.
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Probabilities (for ROC curves)
+        - Feature Log Probabilities (for internal model inspection if supported)
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -210,9 +273,9 @@ class NaiveBayesModel(BaseModel):
     
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        NB doesn't have standard feature importance like Trees/Linear.
-        We can potentially return permutation importance if implemented generically,
-        but Base interface implies simple attribute extraction.
-        Returning empty for now.
+        Naive Bayes does not provide a global feature importance metric comparable to Trees or Linear models.
+        
+        Returns:
+            Dict[str, float]: Empty dictionary.
         """
         return {}

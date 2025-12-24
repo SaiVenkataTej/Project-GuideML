@@ -45,8 +45,19 @@ CONFIG = {
 class LogisticRegressionModel(BaseModel):
     """
     A concrete implementation of Logistic Regression for Classification tasks.
+    
+    This model predicts the probability of an outcome using the logistic sigmoid function.
+    It supports various regularization penalties (L1, L2, ElasticNet) to handle high-dimensional 
+    data and prevent overfitting.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the Logistic Regression model with configurable hyperparameters.
+
+        Args:
+            config: Dictionary containing hyperparameters (e.g., 'C', 'penalty', 'solver').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         super().__init__(
             name="Logistic Regression",
@@ -54,6 +65,7 @@ class LogisticRegressionModel(BaseModel):
         )
         
         # Initialize the base estimator with class_weight='balanced'
+        # to automatically handle imbalanced datasets (common in recommendation).
         self.model_instance = LogisticRegression(
             class_weight='balanced', 
             max_iter=1000, 
@@ -62,15 +74,32 @@ class LogisticRegressionModel(BaseModel):
         
         # Params for GridSearch
         self.param_grid = {
-            'C': [0.01, 0.1, 1.0, 10.0, 100.0],
+            'C': [0.01, 0.1, 1.0, 10.0, 100.0], # Inverse of regularization strength
             'penalty': ['l1', 'l2', 'elasticnet'], 
-            'solver': ['saga'], 
-            'l1_ratio': [0.5] 
+            'solver': ['saga'], # 'saga' supports all penalties including elasticnet
+            'l1_ratio': [0.5] # Only used if penalty='elasticnet'
         }
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for Logistic Regression.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. Standard Scaling. Feature Selection (RFE or Model-Based).
+        2. Categorical: Most frequent imputation. One-Hot encoding.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
+            
+        Raises:
+            ValueError: If target variable 'y' contains NaNs.
         """
         
         # Check for NaNs in target y
@@ -138,7 +167,14 @@ class LogisticRegressionModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using Stratified K-Fold CV and GridSearchCV.
+        Trains the Logistic Regression model using GridSearchCV for hyperparameter tuning.
+        
+        It utilizes Stratified K-Fold Cross-Validation to maintain class distribution across folds,
+        optimizing for the F1-Score (Suitable for balanced/imbalanced data).
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         cv_strategy = StratifiedKFold(
             n_splits=self.config.get('cv_folds', 5), 
@@ -163,7 +199,23 @@ class LogisticRegressionModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates F1, ROC-AUC, Accuracy, Log Loss, Precision, Recall.
+        Calculates standard classification performance metrics.
+
+        Metrics Include:
+        - Accuracy
+        - F1 Score (weighted)
+        - ROC AUC
+        - Log Loss
+        - Precision (weighted)
+        - Recall (weighted)
+        - Prediction Latency (seconds)
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         y_proba = self.best_estimator.predict_proba(X_test)
@@ -185,8 +237,21 @@ class LogisticRegressionModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for visualizations including probabilities for ROC/PR curves
-        and coefficients for Odds Ratios.
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Probabilities (for ROC/PR curves)
+        - Coefficients (Weights) of independent variables (for Odds Ratio analysis)
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -213,6 +278,9 @@ class LogisticRegressionModel(BaseModel):
 
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Returns coefficients as importance.
+        Retrieves feature importance based on the magnitude of the model coefficients.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping feature indices to coefficient values.
         """
         return {} 

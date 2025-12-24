@@ -42,9 +42,21 @@ CONFIG = {
 
 class SVMModel(BaseModel):
     """
-    A concrete implementation of Support Vector Machines (SVM) for Classification (SVC) and Regression (SVR).
+    A concrete implementation of Support Vector Machines (SVM) for both Classification (SVC) and Regression (SVR).
+    
+    This model finds the optimal hyperplane that maximizes the margin between classes (SVC) 
+    or fits the error within a threshold (SVR). It supports various kernels (Linear, RBF, Poly)
+    to handle non-linear relationships and integrates Dimensionality Reduction (PCA) automatically.
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the SVM model with task-specific configurations.
+
+        Args:
+            is_classification: True for classification tasks, False for regression.
+            config: Dictionary containing hyperparameters (e.g., 'C', 'kernel', 'gamma', 'pca_components').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         task_name = "Classification" if is_classification else "Regression"
         name = f"SVM ({task_name})"
@@ -55,7 +67,7 @@ class SVMModel(BaseModel):
         # Initialize Model Instance & Param Grid
         if self.is_classification:
             # SVC with probability=True for diagnostics (optional, but good for ROC/LogLoss)
-            # Class Weights 'balanced' (from requirements)
+            # Class Weights 'balanced' (from requirements) to handle class imbalance.
             self.model_instance = SVC(class_weight='balanced', probability=True, random_state=config.get('random_state', 42))
         else:
             self.model_instance = SVR()
@@ -69,6 +81,20 @@ class SVMModel(BaseModel):
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for SVM.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. Standard Scaling (Critical for SVM). PCA (Dimensionality Reduction).
+        2. Categorical: Most frequent imputation. One-Hot encoding.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
         """
         # 1. Pipeline Construction
         # ------------------------
@@ -136,7 +162,14 @@ class SVMModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using RandomizedSearchCV and appropriate CV (Stratified for Classif).
+        Trains the SVM model using RandomizedSearchCV for hyperparameter tuning.
+        
+        It optimizes 'C', 'kernel', and 'gamma' using Cross-Validation to find the best 
+        decision boundary.
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         if self.is_classification:
             cv = StratifiedKFold( # Stratified K-Fold (Req)
@@ -172,7 +205,18 @@ class SVMModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates Accuracy/F1 (Classif) or RMSE/R2 (Reg).
+        Calculates task-specific performance metrics.
+
+        Metrics Include:
+        - Accuracy, F1 Score (Classification)
+        - RMSE, R2 Score (Regression)
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         
@@ -188,7 +232,21 @@ class SVMModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for diagnostics (Confusion Matrix, Support Vectors).
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Probabilities
+        - Support Vectors (for boundary inspection)
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -212,7 +270,11 @@ class SVMModel(BaseModel):
     
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Returns feature coefficients for Linear kernel only.
+        Retrieves feature importance (Coefficients) for Linear kernel SVMs only.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping feature indices to coefficients for Linear SVM. 
+                              Empty for RBF/Poly kernels.
         """
         if self.model.best_params_['estimator__kernel'] == 'linear':
             if hasattr(self.best_estimator, 'coef_'):

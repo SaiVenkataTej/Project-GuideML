@@ -20,14 +20,17 @@ def apply_one_hot_encoder(
 ) -> pd.DataFrame:
     """
     Applies One-Hot Encoding to nominal categorical features and returns the transformed DataFrame.
-    
+
     Args:
-        data: DataFrame containing categorical features.
-        drop_first: If True, drops the first category (to avoid multicollinearity).
-        handle_unknown_param: How to handle new categories during transformation ('ignore' is safer).
-        
+        data: DataFrame containing categorical features to be encoded.
+        drop_first: If True, drops the first category to avoid multicollinearity (dummy variable trap).
+                    Defaults to False.
+        handle_unknown_param: Strategy to handle new categories during transformation.
+                              'ignore' is safer for production. Defaults to 'ignore'.
+
     Returns:
-        The transformed DataFrame (pd.DataFrame).
+        pd.DataFrame: The transformed DataFrame with one-hot encoded columns.
+                      Original indices are preserved.
     """
     encoder = OneHotEncoder(
         drop='first' if drop_first else None,
@@ -54,14 +57,16 @@ def apply_ordinal_encoder(
     Applies Ordinal Encoding (integer mapping) to rank-based features and returns the transformed DataFrame.
 
     Args:
-        data: DataFrame containing categorical features.
+        data: DataFrame containing categorical features to be encoded.
         categories: Specifies the order of categories. Can be:
-            - 'auto': Categories are inferred and ordered alphabetically.
-            - List[List[str]]: The standard sklearn format (e.g., [['S', 'M', 'L'], ['Low', 'Med', 'High']]).
-            - List[str]: A single flat list of categories if ONLY ONE COLUMN is in the input data.
+            - 'auto': Categories are inferred from the data and ordered alphabetically.
+            - List[List[str]]: The standard sklearn format, a list of lists where each inner list 
+                               corresponds to a column in `data` (e.g., [['S', 'M', 'L'], ['Low', 'High']]).
+            - List[str]: A single flat list of categories. This is a convenience for when 
+                         multiple columns share the same category order (e.g., all are Likert scales).
 
     Returns:
-        The transformed DataFrame (pd.DataFrame).
+        pd.DataFrame: The transformed DataFrame with ordinal encoded columns.
     """
     
     # Standardize 'categories' for the sklearn API, handling flat list input
@@ -119,7 +124,8 @@ def apply_label_encoder_target(
         target_series: The target variable (y) as a Series.
         
     Returns:
-        The encoded Series (pd.Series).
+        pd.Series: The encoded Series with integer labels.
+                   The series name and index are preserved.
     """
     encoder = LabelEncoder()
     

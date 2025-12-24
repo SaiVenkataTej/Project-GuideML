@@ -46,10 +46,21 @@ CONFIG = {
 
 class RandomForestModel(BaseModel):
     """
-    A concrete implementation of Random Forest for Classification and Regression.
-    Incorporates RandomizedSearchCV, OOB Error, and Feature Importance.
+    A concrete implementation of Random Forest for both Classification and Regression.
+    
+    This ensemble method constructs a multitude of decision trees at training time. 
+    It supports automatic task type inference, cost-sensitive learning for imbalanced data, 
+    and incorporates specialized metrics like OOB (Out-of-Bag) error.
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the Random Forest model.
+
+        Args:
+            is_classification: True for classification tasks, False for regression.
+            config: Dictionary containing hyperparameters (e.g., 'n_estimators', 'max_depth').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         task_name = "Classification" if is_classification else "Regression"
         name = f"Random Forest ({task_name})"
@@ -77,6 +88,24 @@ class RandomForestModel(BaseModel):
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for Random Forest.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. (Scaling is generally not required for Trees).
+        2. Categorical: Most frequent imputation. One-Hot encoding (or Ordinal).
+        3. Feature Selection: Model-based selection using a lightweight Random Forest.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Selected feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object (Note: Does not include the selection step)
+            
+        Raises:
+            ValueError: If target variable 'y' contains NaNs.
         """
         if y.isna().any():
              raise ValueError("Target variable 'y' contains missing values.")
@@ -156,7 +185,14 @@ class RandomForestModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using RandomizedSearchCV.
+        Trains the Random Forest model using RandomizedSearchCV for hyperparameter optimization.
+        
+        It utilizes Cross-Validation to find the best configuration for tree density, 
+        depth, and split criteria.
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         # Base Estimator
         if self.is_classification:
@@ -202,7 +238,19 @@ class RandomForestModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates Task-Specific metrics.
+        Calculates task-specific performance metrics.
+
+        Metrics Include:
+        - OOB Score (Out-of-Bag estimate)
+        - F1 Score, ROC AUC (Classification)
+        - RMSE (Regression)
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         # Note: X_test must be transformed AND selected (via self.feature_selector) before passed here
         # BUT preprocess() returns preprocessor, not selector for external use.
@@ -253,7 +301,23 @@ class RandomForestModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for diagnostics (Feature Importance, Tree Diagram source).
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Truth values
+        - Feature Importance (MDI)
+        - Single Estimator (Tree) for structure visualization
+        - OOB Score
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -287,7 +351,12 @@ class RandomForestModel(BaseModel):
         }
 
     def get_feature_importance(self) -> Dict[str, float]:
-        """Returns MDI feature importance."""
+        """
+        Retrieves the Mean Decrease in Impurity (MDI) feature importance.
+        
+        Returns:
+            Dict[str, float]: Dictionary containing importance array (indices are keys implicitly via direct return logic).
+        """
         if hasattr(self.best_estimator, 'feature_importances_'):
              # Return array, logic to map to names would require knowing feature names here
              return {'importances': self.best_estimator.feature_importances_}

@@ -18,17 +18,17 @@ plt.rcParams['figure.figsize'] = (10, 6)
 def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Optional[str] = None) -> Figure:
     """
     Generates a Seaborn heatmap showing the correlation between all features.
-    
+
     Args:
         df: DataFrame containing all features and the target.
         target_column: The name of the column representing the target variable.
         save_path: Optional path to save the plot (e.g., 'correlation.png').
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the heatmap.
     """
     fig, ax = plt.subplots(figsize=(12, 10))
-    corr = df.corr()
+    corr = df.corr(numeric_only=True)
     
     # Optional: Focus heatmap on target correlation for easier interpretation
     k = 15  # Number of variables for heatmap
@@ -62,15 +62,15 @@ def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Op
 
 def plot_feature_histograms(df: pd.DataFrame, features: List[str], save_path: Optional[str] = None) -> Figure:
     """
-    Generates histograms for key feature distributions.
-    
+    Generates histograms for key feature distributions to visualize data spread and skewness.
+
     Args:
         df: DataFrame containing the data.
         features: List of feature names to plot.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the histograms.
     """
     n_features = len(features)
     n_cols = 3
@@ -104,16 +104,16 @@ def plot_feature_histograms(df: pd.DataFrame, features: List[str], save_path: Op
 
 def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates the Receiver Operating Characteristic (ROC) curve.
-    
+    Generates the Receiver Operating Characteristic (ROC) curve to evaluate classifier performance.
+
     Args:
         y_true: True binary labels (0 or 1).
         y_proba: Target scores, usually the probability of the positive class.
         model_name: Name of the model for the plot title/legend.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the ROC curve.
     """
     # Calculate ROC curve and AUC
     fpr, tpr, thresholds = roc_curve(y_true, y_proba)
@@ -141,17 +141,17 @@ def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, sav
 
 def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, classes: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates a Seaborn Confusion Matrix heatmap.
-    
+    Generates a Seaborn Confusion Matrix heatmap to visualize misclassifications.
+
     Args:
         y_true: True labels.
         y_pred: Predicted labels.
-        classes: Array of class labels (e.g., ['No', 'Yes']).
+        classes: Array of class labels (e.g., ['No', 'Yes']) for axis annotation.
         model_name: Name of the model for the plot title.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the confusion matrix.
     """
     cm = confusion_matrix(y_true, y_pred)
     cm_df = pd.DataFrame(cm, index=classes, columns=classes)
@@ -183,17 +183,17 @@ def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, classes: np.nd
 
 def plot_feature_importance(feature_names: List[str], importances: np.ndarray, model_name: str, top_n: int = 15, save_path: Optional[str] = None) -> Figure:
     """
-    Generates a horizontal bar chart showing the Feature Importance (for tree-based models).
-    
+    Generates a horizontal bar chart showing the Feature Importance (specifically for tree-based models).
+
     Args:
         feature_names: List of feature names.
         importances: Array of feature importance scores.
         model_name: Name of the model.
-        top_n: Number of top features to display.
+        top_n: Number of top features to display. Defaults to 15.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the feature importance plot.
     """
     # Combine, sort, and select top N features
     feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
@@ -215,17 +215,18 @@ def plot_feature_importance(feature_names: List[str], importances: np.ndarray, m
 def plot_coefficient_bar_chart(feature_names: List[str], coefficients: np.ndarray, model_name: str, is_odds_ratio: bool = False, top_n: int = 15, save_path: Optional[str] = None) -> Figure:
     """
     Generates a bar chart of Coefficients/Weights (for Linear/Logistic Regression).
-    
+
     Args:
         feature_names: List of feature names.
         coefficients: Array of coefficients (weights).
         model_name: Name of the model.
-        is_odds_ratio: If True, plots exp(coefficients) for Logistic Regression interpretation.
-        top_n: Number of top/bottom features to display.
+        is_odds_ratio: If True, plots exp(coefficients) for Logistic Regression interpretation (Odds Ratio).
+                       Defaults to False.
+        top_n: Number of top feature coefficients (by absolute magnitude) to display. Defaults to 15.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the coefficient plot.
     """
     if is_odds_ratio:
         # For Logistic Regression, plot the Odds Ratio (exp(coef))
@@ -266,16 +267,16 @@ def plot_coefficient_bar_chart(feature_names: List[str], coefficients: np.ndarra
 
 def plot_predicted_vs_actual(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates a scatter plot of Predicted vs. Actual values.
-    
+    Generates a scatter plot of Predicted vs. Actual values to assess regression performance.
+
     Args:
         y_true: True target values.
         y_pred: Predicted target values.
         model_name: Name of the model.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the scatter plot.
     """
     fig, ax = plt.subplots(figsize=(8, 8))
     
@@ -300,16 +301,16 @@ def plot_predicted_vs_actual(y_true: np.ndarray, y_pred: np.ndarray, model_name:
 
 def plot_residual_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates a Residual Plot to check for homoscedasticity.
-    
+    Generates a Residual Plot to check for homoscedasticity (constant variance of errors).
+
     Args:
         y_true: True target values.
         y_pred: Predicted target values.
         model_name: Name of the model.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the residual plot.
     """
     residuals = y_true - y_pred
     
@@ -330,16 +331,16 @@ def plot_residual_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, 
 
 def plot_qq_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates a Q-Q Plot (Quantile-Quantile) to check normality of residuals.
-    
+    Generates a Q-Q Plot (Quantile-Quantile) to visually check the normality of residuals.
+
     Args:
         y_true: True target values.
         y_pred: Predicted target values.
         model_name: Name of the model.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the Q-Q plot.
     """
     import scipy.stats as stats
     
@@ -364,16 +365,17 @@ def plot_qq_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, save_p
 
 def plot_precision_recall_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
-    Generates the Precision-Recall Curve.
-    
+    Generates the Precision-Recall Curve, which is useful for imbalanced datasets.
+
     Args:
         y_true: True binary labels.
-        y_proba: Predicted probabilities (expecting positive class probabilities or 2D array).
+        y_proba: Predicted probabilities (usually for the positive class). 
+                 Can be a 1D array of probabilities or a 2D array where the second column is the positive class.
         model_name: Name of the model.
         save_path: Optional path to save the plot.
-        
+
     Returns:
-        The Matplotlib Figure object.
+        Figure: The Matplotlib Figure object containing the Precision-Recall curve.
     """
     from sklearn.metrics import precision_recall_curve, average_precision_score
     

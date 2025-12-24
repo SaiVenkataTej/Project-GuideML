@@ -22,19 +22,59 @@ Array = np.ndarray # Use Array for variables *known* to be numpy arrays
 
 # Changed Array to ArrayLike in all function signatures
 def calculate_rmse(y_true: ArrayLike, y_pred: ArrayLike) -> float:
-    """Calculates Root Mean Squared Error (RMSE)."""
+    """
+    Calculates Root Mean Squared Error (RMSE).
+
+    Args:
+        y_true: Ground truth (correct) target values.
+        y_pred: Estimated target values.
+
+    Returns:
+        float: The root mean squared error. Lower is better.
+    """
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
 def calculate_mae(y_true: ArrayLike, y_pred: ArrayLike) -> float:
-    """Calculates Mean Absolute Error (MAE)."""
+    """
+    Calculates Mean Absolute Error (MAE).
+
+    Args:
+        y_true: Ground truth (correct) target values.
+        y_pred: Estimated target values.
+
+    Returns:
+        float: The mean absolute error. Lower is better.
+    """
     return mean_absolute_error(y_true, y_pred)
 
 def calculate_r2_score(y_true: ArrayLike, y_pred: ArrayLike) -> float:
-    """Calculates R^2 Score (Coefficient of Determination)."""
+    """
+    Calculates R^2 Score (Coefficient of Determination).
+
+    Args:
+        y_true: Ground truth (correct) target values.
+        y_pred: Estimated target values.
+
+    Returns:
+        float: The R^2 score. Best possible score is 1.0.
+    """
     return r2_score(y_true, y_pred)
 
 def calculate_adjusted_r2(y_true: ArrayLike, y_pred: ArrayLike, n_samples: int, n_features: int) -> float:
-    """Calculates Adjusted R^2 Score."""
+    """
+    Calculates Adjusted R^2 Score.
+    
+    The adjusted R-squared increases only if the new term improves the model more than would be expected by chance.
+
+    Args:
+        y_true: Ground truth (correct) target values.
+        y_pred: Estimated target values.
+        n_samples: Number of samples in the dataset.
+        n_features: Number of features used in the model.
+
+    Returns:
+        float: The adjusted R^2 score.
+    """
     r2 = calculate_r2_score(y_true, y_pred)
     
     n = n_samples
@@ -48,11 +88,31 @@ def calculate_adjusted_r2(y_true: ArrayLike, y_pred: ArrayLike, n_samples: int, 
 # --- 2. Classification Metrics ---
 
 def calculate_accuracy(y_true: ArrayLike, y_pred: ArrayLike) -> float:
-    """Calculates Classification Accuracy."""
+    """
+    Calculates Classification Accuracy.
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_pred: Predicted labels.
+
+    Returns:
+        float: The accuracy score (fraction of correct predictions).
+    """
     return float(accuracy_score(y_true, y_pred))
 
 def calculate_f1_score(y_true: ArrayLike, y_pred: ArrayLike, average: Literal['micro', 'macro', 'samples', 'weighted', 'binary'] = 'weighted') -> float:
-    """Calculates F1-Score (balance of Precision and Recall)."""
+    """
+    Calculates F1-Score (harmonic mean of Precision and Recall).
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_pred: Predicted labels.
+        average: This parameter is required for multiclass/multilabel targets.
+                 Defaults to 'weighted'.
+
+    Returns:
+        float: The F1 score.
+    """
     return float(f1_score(y_true, y_pred, average=average, zero_division=0))
 
 def calculate_roc_auc_score(
@@ -63,7 +123,18 @@ def calculate_roc_auc_score(
 ) -> float:
     """
     Calculates Area Under the Receiver Operating Characteristic Curve (ROC-AUC).
+    
     Requires probability scores (y_proba). Enhanced for robust multi-class support.
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_proba: Predicted probabilities.
+        multi_class_strategy: Strategy for handling multi-class. 'ovo' (One-vs-One) or 'ovr' (One-vs-Rest).
+                              Defaults to 'ovr'.
+        average: Averaging strategy. Defaults to 'weighted'.
+
+    Returns:
+        float: The ROC-AUC score.
     """
     # Ensure inputs are NumPy arrays for safety
     y_proba_arr = np.asarray(y_proba) # Renamed to y_proba_arr
@@ -102,15 +173,46 @@ def calculate_roc_auc_score(
     return float(roc_auc_score(y_true_arr, y_score, **kwargs)) # Pass y_true_arr and y_score
 
 def calculate_precision(y_true: ArrayLike, y_pred: ArrayLike, average: Literal['micro', 'macro', 'samples', 'weighted', 'binary'] = 'weighted') -> float:
-    """Calculates Classification Precision."""
+    """
+    Calculates Classification Precision.
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_pred: Predicted labels.
+        average: This parameter is required for multiclass/multilabel targets.
+                 Defaults to 'weighted'.
+
+    Returns:
+        float: The precision score.
+    """
     return float(precision_score(y_true, y_pred, average=average, zero_division=0))
 
 def calculate_log_loss(y_true: ArrayLike, y_proba: ArrayLike) -> float:
-    """Calculates Log Loss (Cross-Entropy Loss)."""
+    """
+    Calculates Log Loss (Cross-Entropy Loss).
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_proba: Predicted probabilities.
+
+    Returns:
+        float: The log loss.
+    """
     return float(log_loss(y_true, y_proba))
 
 def calculate_precision_recall_score(y_true: ArrayLike, y_pred: ArrayLike, average: Literal['micro', 'macro', 'samples', 'weighted', 'binary'] = 'weighted') -> Tuple[float, float]:
-    """Calculates Precision and Recall simultaneously."""
+    """
+    Calculates Precision and Recall simultaneously.
+
+    Args:
+        y_true: Ground truth (correct) labels.
+        y_pred: Predicted labels.
+        average: This parameter is required for multiclass/multilabel targets.
+                 Defaults to 'weighted'.
+
+    Returns:
+        Tuple[float, float]: A tuple containing (precision, recall).
+    """
     precision, recall, _, _ = precision_recall_fscore_support(
         y_true, y_pred, average=average, zero_division=0
     )
@@ -120,13 +222,29 @@ def calculate_precision_recall_score(y_true: ArrayLike, y_pred: ArrayLike, avera
 # --- 3. Model-Specific Diagnostics (Input remains compatible with Any or object) ---
 
 def get_oob_score(model_instance) -> Optional[float]:
-    """Retrieves the Out-of-Bag (OOB) score from a fitted tree-based model (Random Forest)."""
+    """
+    Retrieves the Out-of-Bag (OOB) score from a fitted tree-based model (Random Forest).
+
+    Args:
+        model_instance: The trained model instance.
+
+    Returns:
+        Optional[float]: The OOB score if available, else None.
+    """
     if hasattr(model_instance, 'oob_score_') and model_instance.oob_score_ is not None:
         return model_instance.oob_score_
     return None
 
 def get_tree_depth(model_instance) -> Optional[int]:
-    """Retrieves the maximum depth of a decision tree or average depth for ensembles."""
+    """
+    Retrieves the maximum depth of a decision tree or average depth for ensembles.
+
+    Args:
+        model_instance: The trained model instance.
+
+    Returns:
+        Optional[int]: The depth of the tree (or mean depth for ensembles), else None.
+    """
     if hasattr(model_instance, 'tree_'):
         return model_instance.tree_.max_depth
     elif hasattr(model_instance, 'estimators_'):
@@ -136,7 +254,15 @@ def get_tree_depth(model_instance) -> Optional[int]:
     return None
 
 def get_leaf_count(model_instance) -> Optional[int]:
-    """Retrieves the number of leaf nodes for a decision tree or average leaf count for ensembles."""
+    """
+    Retrieves the number of leaf nodes for a decision tree or average leaf count for ensembles.
+
+    Args:
+        model_instance: The trained model instance.
+
+    Returns:
+        Optional[int]: The leaf count (or mean leaf count for ensembles), else None.
+    """
     if hasattr(model_instance, 'tree_'):
         return model_instance.tree_.n_leaves
     elif hasattr(model_instance, 'estimators_'):
@@ -146,7 +272,17 @@ def get_leaf_count(model_instance) -> Optional[int]:
     return None
 
 def measure_prediction_latency(model_instance, X_test: np.ndarray, n_runs: int = 100) -> float:
-    """Measures the average time taken for a model (like KNN) to predict on the test set."""
+    """
+    Measures the average time taken for a model (like KNN) to predict on the test set.
+
+    Args:
+        model_instance: The trained model instance.
+        X_test: Test data features.
+        n_runs: Number of runs to average the latency over. Defaults to 100.
+
+    Returns:
+        float: Average latency per prediction run in seconds.
+    """
     if not hasattr(model_instance, 'predict'):
         return np.nan
     

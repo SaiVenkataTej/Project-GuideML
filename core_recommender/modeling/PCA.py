@@ -28,9 +28,19 @@ CONFIG = {
 class PCAModel(BaseModel):
     """
     A concrete implementation of Principal Component Analysis (PCA) for unsupervised dimensionality reduction.
-    Adapts the supervised BaseModel interface by ignoring target labels during fit.
+    
+    This adapter class wraps scikit-learn's PCA transformation into the project's standard 
+    Model interface, allowing it to be executed, evaluated (reconstruction error), and 
+    visualized within the same pipeline as supervised models.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the PCA model wrapper.
+
+        Args:
+            config: Dictionary containing hyperparameters (e.g., 'n_components', 'whiten').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         name = "Principal Component Analysis (PCA)"
         super().__init__(name=name, config=config)
@@ -44,8 +54,22 @@ class PCAModel(BaseModel):
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series = None) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
-        Constructs a numeric-only pipeline. Categorical features are typically dropped or must be pre-encoded.
-        For PCA, we usually focus on numerical features.
+        Constructs and applies the feature pipeline optimized for PCA.
+        
+        Pipeline Steps:
+        1. Numerical: Mean imputation. Standard Scaling (Crucial for PCA).
+        2. Categorical: Dropped (PCA typically handles numerical data). 
+           (Note: OneHot encoding could be added if categorical data is required, but standard practice here focuses on numeric).
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series (Ignored for PCA, but kept for interface compatibility).
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Target array (Passed through or dummy)
+            - The fitted ColumnTransformer object
         """
         # 1. Pipeline Construction
         # ------------------------
@@ -83,11 +107,15 @@ class PCAModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray = None):
         """
-        Fits PCA on X_train. y_train is ignored.
+        Fits the PCA transformer on the training data.
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array (Ignored).
         """
         print(f"[{self.name}] Fitting PCA...")
         self.model_instance.fit(X_train)
-        self.model = self.model_instance # consistent with export
+        self.model = self.model_instance # Assign to self.model for export compatibility
         
         n_comps = self.model_instance.n_components_
         var_ratio = np.sum(self.model_instance.explained_variance_ratio_)
@@ -95,7 +123,19 @@ class PCAModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray = None) -> Dict[str, float]:
         """
-        Calculates Reconstruction Error (RMSE) and Total Explained Variance.
+        Calculates PCA-specific metrics by reconstructing the test data.
+        
+        Metrics Include:
+        - Reconstruction RMSE: Loss of information due to reduction.
+        - Explained Variance: Total variance retained by the components.
+        - n_components: Number of components used.
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array (Ignored).
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         # Transform and Inverse Transform to calculate reconstruction error
         X_pca = self.model_instance.transform(X_test)
@@ -113,7 +153,17 @@ class PCAModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray = None) -> Dict[str, Any]:
         """
-        Returns Scree Plot data in 'feature_importance' slot or custom.
+        Retrieves diagnostic data for visualization (e.g., Scree Plot).
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array (Ignored).
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing variance ratios and singular values.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         return {
             'explained_variance_ratio': self.model_instance.explained_variance_ratio_,
@@ -124,8 +174,9 @@ class PCAModel(BaseModel):
 
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Returns the components (loadings) magnitude? 
-        Or just explained variance per component.
+        Returns the Explained Variance Ratio per component index as a proxy for "importance".
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping component index to variance explained.
         """
-        # Just returning explained variance ratio per component index
         return dict(enumerate(self.model_instance.explained_variance_ratio_))

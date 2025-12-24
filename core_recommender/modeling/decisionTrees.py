@@ -44,10 +44,21 @@ CONFIG = {
 
 class DecisionTreeModel(BaseModel):
     """
-    A concrete implementation of Decision Trees for Classification and Regression.
-    Supports Cost-Complexity Pruning and specialized Tree Metrics.
+    A concrete implementation of Decision Trees for both Classification and Regression tasks.
+    
+    This model supports Cost-Complexity Pruning (CCP) to control overfitting and 
+    integrates specialized tree metrics such as depth and leaf count. It handles 
+    data preprocessing, training, and evaluation within the standardized pipeline.
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the Decision Tree model with task-specific configurations.
+
+        Args:
+            is_classification: True for classification tasks, False for regression.
+            config: Dictionary containing hyperparameters (e.g., 'max_depth', 'ccp_alpha').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         task_name = "Classification" if is_classification else "Regression"
         name = f"Decision Tree ({task_name})"
@@ -55,7 +66,7 @@ class DecisionTreeModel(BaseModel):
         
         self.is_classification = is_classification
         
-        # Initialize Model Instance
+        # Initialize Model Instance (Scikit-Learn)
         if self.is_classification:
             self.model_instance = DecisionTreeClassifier(random_state=config.get('random_state', 42))
         else:
@@ -84,6 +95,20 @@ class DecisionTreeModel(BaseModel):
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for Decision Trees.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. Variance threshold or SelectKBest feature selection.
+        2. Categorical: Most frequent imputation. One-Hot or Ordinal encoding.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
         """
         # 1. Pipeline Construction
         # ------------------------
@@ -147,7 +172,14 @@ class DecisionTreeModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using GridSearchCV and appropriate CV.
+        Trains the Decision Tree model using GridSearchCV for hyperparameter tuning.
+        
+        It utilizes Cross-Validation (StratifiedKFold for classification, KFold for regression)
+        to find the best parameters from the defined `param_grid`.
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         if self.is_classification:
             cv = StratifiedKFold( # Stratified K-Fold (Req)
@@ -186,7 +218,19 @@ class DecisionTreeModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates Accuracy/RMSE and Tree Complexity.
+        Calculates standard performance metrics and specific tree complexity metrics.
+
+        Metrics Include:
+        - Accuracy (Classification) or RMSE (Regression)
+        - Tree Depth
+        - Leaf Count
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         
@@ -205,7 +249,23 @@ class DecisionTreeModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for diagnostics (Tree Viz, Feature Importance).
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Truth values
+        - Feature Importance
+        - Graphviz source code for tree visualization
+        - Validation curve data (extracted from GridSearch results)
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -240,7 +300,10 @@ class DecisionTreeModel(BaseModel):
     
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Returns Gini Importance (Feature Importance).
+        Retrieves the Gini Importance (Feature Importance) from the trained tree.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping feature indices to their importance scores.
         """
         if hasattr(self.best_estimator, 'feature_importances_'):
             # Note: We need feature names to make this mapped dict useful.

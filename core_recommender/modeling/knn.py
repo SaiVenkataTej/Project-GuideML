@@ -45,9 +45,21 @@ CONFIG = {
 
 class KNNModel(BaseModel):
     """
-    A concrete implementation of K-Nearest Neighbors (KNN) for Classification and Regression.
+    A concrete implementation of K-Nearest Neighbors (KNN) for both Classification and Regression tasks.
+    
+    This model utilizes proximity-based predictions. It supports various distance metrics 
+    (Euclidean, Manhattan, Minkowski) and weighting schemes (Uniform, Distance-weighted).
+    Dimensionality reduction (PCA/NCA) is integrated to mitigate the "Curse of Dimensionality".
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the KNN model with task-specific configurations.
+
+        Args:
+            is_classification: True for classification tasks, False for regression.
+            config: Dictionary containing hyperparameters (e.g., 'n_neighbors', 'metric').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         task_name = "Classification" if is_classification else "Regression"
         name = f"KNN ({task_name})"
@@ -55,7 +67,7 @@ class KNNModel(BaseModel):
         
         self.is_classification = is_classification
         
-        # Initialize Model Instance
+        # Initialize Model Instance (Scikit-Learn)
         if self.is_classification:
             self.model_instance = KNeighborsClassifier(n_jobs=config.get('n_jobs', -1))
         else:
@@ -70,6 +82,20 @@ class KNNModel(BaseModel):
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for KNN.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. Scaling (Standard or MinMax). Dimensionality Reduction (PCA or NCA).
+        2. Categorical: Most frequent imputation. One-Hot encoding.
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
         """
         # 1. Pipeline Construction
         # ------------------------
@@ -147,7 +173,13 @@ class KNNModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using GridSearchCV and appropriate CV.
+        Trains the KNN model using GridSearchCV for hyperparameter tuning.
+        
+        It optimally selects 'n_neighbors', 'weights', and 'metric' using Cross-Validation.
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         if self.is_classification:
             cv = StratifiedKFold( # Stratified K-Fold (Req)
@@ -181,7 +213,19 @@ class KNNModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates Accuracy/MAE and Prediction Latency.
+        Calculates performance metrics including Prediction Latency.
+
+        Metrics Include:
+        - Accuracy, F1 Score, MAE (Classification)
+        - MAE, RMSE (Regression)
+        - Prediction Latency (seconds)
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         
@@ -205,7 +249,22 @@ class KNNModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for diagnostics (Elbow Plot, Decision Boundary).
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Truth values
+        - Elbow Plot data (Error vs. K)
+        - Local Neighbor Inspection data (indices and distances)
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -238,6 +297,10 @@ class KNNModel(BaseModel):
     
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        KNN doesn't provide global feature importance.
+        KNN does not provide global feature importance scores as it is a distance-based, 
+        instance-based learning algorithm (lazy learner).
+
+        Returns:
+            Dict[str, float]: Empty dictionary.
         """
         return {}

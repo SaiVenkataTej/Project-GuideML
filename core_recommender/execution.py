@@ -26,19 +26,25 @@ class ModelExecutor:
     
     Responsibilities:
     1. Detect Task Type (Regression vs Classification)
-    2. Split Data
-    3. Instantiate Models
-    4. Train Models Concurrently
-    5. Rank and Select Best Model
-    6. Generate Diagnostics
+    2. Split Data (Train/Test)
+    3. Instantiate Models (Based on Task Type)
+    4. Train Models Concurrently (Parallel Processing)
+    5. Rank and Select Best Model (Based on Metrics)
+    6. Generate Diagnostics (Confusion Matrix, Plots, etc.)
     """
     
     def __init__(self, task_type: str = 'auto', n_jobs: int = -1, random_state: int = 42):
         """
+        Initializes the ModelExecutor.
+
         Args:
-            task_type: 'classification', 'regression', or 'auto' (inferred from target).
-            n_jobs: Number of parallel jobs for training models (-1 for all cores).
-            random_state: Seed for reproducibility.
+            task_type: The type of machine learning task. Options:
+                       - 'classification': Force classification mode.
+                       - 'regression': Force regression mode.
+                       - 'auto': Infer from the target variable (default).
+            n_jobs: Number of parallel jobs for training models. 
+                    -1 for using all available cores. Defaults to -1.
+            random_state: Seed for reproducibility across splits and models. Defaults to 42.
         """
         self.task_type = task_type
         self.n_jobs = n_jobs
@@ -49,7 +55,15 @@ class ModelExecutor:
         self.best_model_instance = None
 
     def _infer_task_type(self, y: pd.Series) -> str:
-        """Infers classification or regression based on target variable properties."""
+        """
+        Infers whether the problem is 'classification' or 'regression' based on the target variable.
+
+        Args:
+            y: The target variable series.
+
+        Returns:
+            str: 'classification' or 'regression'.
+        """
         if self.task_type != 'auto':
             return self.task_type
             
@@ -59,23 +73,40 @@ class ModelExecutor:
         # If int and few unique values (<20) -> Classification
         # If int and many unique values -> Regression (Assumed, but ambiguous)
         
+        if pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or pd.api.types.is_categorical_dtype(y):
+            # If target is string/object, it MUST be classification (unless we want to try NLP regression, out of scope)
+            # Check if it looks like numbers stored as strings?
+            try:
+                pd.to_numeric(y, errors='raise')
+                # If it converts, it might be regression, proceed to integer check
+            except Exception:
+                return 'classification'
+            
         if pd.api.types.is_float_dtype(y):
             return 'regression'
-        elif pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or pd.api.types.is_categorical_dtype(y):
-            return 'classification'
-        elif pd.api.types.is_integer_dtype(y):
-            if y.nunique() < 20:
-                print(f"Target has {y.nunique()} unique integers. Inferring CLASSIFICATION.")
+        elif pd.api.types.is_integer_dtype(y) or (pd.api.types.is_object_dtype(y) and y.str.isnumeric().all()):
+            # Treat numeric strings as integers for this check
+            n_unique = y.nunique()
+            if n_unique < 20:
+                print(f"Target has {n_unique} unique values. Inferring CLASSIFICATION.")
                 return 'classification'
             else:
-                print(f"Target has {y.nunique()} unique integers. Inferring REGRESSION.")
+                print(f"Target has {n_unique} unique values. Inferring REGRESSION.")
                 return 'regression'
         
         # Default fallback
         return 'regression'
 
     def _get_candidate_models(self, task_type: str) -> List[BaseModel]:
-        """Instantiates the list of models appropriate for the task."""
+        """
+        Instantiates the list of models appropriate for the task.
+
+        Args:
+            task_type: 'classification' or 'regression'.
+
+        Returns:
+            List[BaseModel]: A list of instantiated model objects ready for training.
+        """
         models = []
         
         # 1. KNN (Universal)
@@ -105,7 +136,24 @@ class ModelExecutor:
     def _train_single_model(self, model: BaseModel, X_train, y_train, X_test, y_test) -> Dict[str, Any]:
         """
         Worker function to train and evaluate a single model.
-        Returns a dictionary with results.
+        Designed to be run in parallel (via joblib).
+
+        Args:
+            model: The model instance to train.
+            X_train: Training features.
+            y_train: Training targets.
+            X_test: Test features.
+            y_test: Test targets.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing:
+                            - 'model_name': Name of the model.
+                            - 'status': 'success' or 'failed'.
+                            - 'metrics': Dictionary of evaluation metrics.
+                            - 'model_instance': The trained model object.
+                            - 'preprocessor': The fitted preprocessor.
+                            - 'test_data_proc': Tuple of (processed X_test, processed y_test).
+                            - 'error': Error message if failed.
         """
         try:
             print(f"[{model.name}] Training started...")
@@ -165,7 +213,22 @@ class ModelExecutor:
 
     def run(self, df: pd.DataFrame, target_column: str) -> Dict[str, Any]:
         """
-        Main execution point.
+        Main execution point for the AutoML pipeline.
+
+        Args:
+            df: The input pandas DataFrame containing features and the target column.
+            target_column: The name of the column to predict.
+
+        Returns:
+            Dict[str, Any]: A summary dictionary containing:
+                            - 'task_type': Inferred or specified task type.
+                            - 'total_time': Total execution time in seconds.
+                            - 'leaderboard': List of results for all models.
+                            - 'best_model': Dictionary with details of the best performing model.
+        
+        Raises:
+            ValueError: If target_column is not in df.
+            RuntimeError: If all models fail to train.
         """
         start_time = time.time()
         
@@ -176,6 +239,24 @@ class ModelExecutor:
         # 2. Separate Features and Target
         X = df.drop(columns=[target_column])
         y = df[target_column]
+
+        # --- DATA CLEANING & TYPE ENFORCEMENT ---
+        # 1. Attempt to convert all object columns to numeric where possible
+        # 2. If valid strings exist, ensure they are kept as object/category for OneHot
+        for col in X.columns:
+            if X[col].dtype == 'object':
+                try:
+                    # Try converting to numeric
+                    X[col] = pd.to_numeric(X[col])
+                except (ValueError, TypeError):
+                    # If failed, it contains strings.
+                    # Ensure it's explicitly 'category' or 'object' for the pipeline to hit 'cat' step
+                    X[col] = X[col].astype(str)
+        
+        # Also clean Target if it's supposed to be specific type? 
+        # For now, let inference handle y. 
+        # But ensure X has no mixed types that confuse sklearn.
+        # ----------------------------------------
         
         # 3. Infer Task
         inferred_task = self._infer_task_type(y)

@@ -45,10 +45,20 @@ CONFIG = {
 
 class LinearRegressionModel(BaseModel):
     """
-    A concrete implementation of Linear Regression (incorporating Ridge, Lasso, ElasticNet)
-    inheriting from BaseModel.
+    A concrete implementation of Linear Regression optimized for Regression tasks.
+    
+    This model utilizes ElasticNet, which generalizes Ridge (L2 penalty) and Lasso (L1 penalty)
+    regularization. This allows for both variable selection and coefficient shrinkage, making 
+    it robust against multicollinearity and overfitting.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
+        """
+        Initializes the Linear Regression model with configurable regularization.
+
+        Args:
+            config: Dictionary containing hyperparameters (e.g., 'alpha', 'l1_ratio').
+                    Defaults to the global CONFIG dictionary.
+        """
         
         # We use ElasticNet as the base estimator because it generalizes Lasso (l1_ratio=1) 
         # and Ridge (l1_ratio=0), allowing us to tune both via GridSearchCV.
@@ -67,13 +77,29 @@ class LinearRegressionModel(BaseModel):
         self.param_grid = {
             'alpha': [0.01, 0.1, 1.0, 10.0],  # Regularization strength
             'l1_ratio': [0.1, 0.5, 0.7, 0.9, 1.0] # 1.0 = Lasso, 0.0 ~ Ridge. 
-            # Note: 0.0 in ElasticNet is not exactly Ridge in some implementations, but close.
-            # Pure Ridge can be added as a separate estimator if strictly needed, but this covers the "Technique" requirement.
         }
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
         Constructs and applies the feature pipeline optimized for Linear Regression.
+        
+        Pipeline Steps:
+        1. Numerical: Median imputation. Transformations (Log, Box-Cox, Yeo-Johnson). 
+           Robust or Standard Scaling. Feature Selection.
+        2. Categorical: Most frequent imputation. One-Hot encoding (drop='first' to avoid dummy trap).
+        
+        Args:
+            X: Input features DataFrame.
+            y: Target Series.
+            
+        Returns:
+            Tuple containing:
+            - Transformed feature array (np.ndarray)
+            - Transformed target array (np.ndarray)
+            - The fitted ColumnTransformer object
+            
+        Raises:
+            ValueError: If target variable 'y' contains NaNs.
         """
         # Edge Case: Check for NaNs in target y before proceeding
         if y.isna().any():
@@ -153,7 +179,14 @@ class LinearRegressionModel(BaseModel):
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """
-        Trains using K-Fold CV and GridSearchCV.
+        Trains the Linear Regression model using GridSearchCV for hyperparameter tuning.
+        
+        It optimally selects 'alpha' and 'l1_ratio' using K-Fold Cross-Validation 
+        to balance bias and variance (handling both Ridge and Lasso constraints).
+        
+        Args:
+            X_train: Training features array.
+            y_train: Training target array.
         """
         # K-Fold Cross Validation (Shuffle=True)
         cv_strategy = KFold(
@@ -180,7 +213,20 @@ class LinearRegressionModel(BaseModel):
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates RMSE, MAE, R2, Adjusted R2.
+        Calculates standard regression performance metrics.
+
+        Metrics Include:
+        - Root Mean Squared Error (RMSE)
+        - Mean Absolute Error (MAE)
+        - R-squared (R2) score
+        - Adjusted R2 score
+
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, float]: Dictionary of calculated metrics.
         """
         y_pred = self.best_estimator.predict(X_test)
         
@@ -202,7 +248,21 @@ class LinearRegressionModel(BaseModel):
 
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Returns data for visualizations: Predicted vs Actual, Residuals, Coefficients.
+        Retrieves diagnostic data for visualization.
+        
+        Includes:
+        - Predictions and Truth values (for Predicted vs Actual plot)
+        - Coefficients (Weights) of independent variables
+        
+        Args:
+            X_test: Test features array.
+            y_test: Test target array.
+            
+        Returns:
+            Dict[str, Any]: Data dictionary for the visualization module.
+            
+        Raises:
+            RuntimeError: If the model has not been trained yet.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
@@ -218,7 +278,10 @@ class LinearRegressionModel(BaseModel):
 
     def get_feature_importance(self) -> Dict[str, float]:
         """
-        Returns coefficients as feature importance.
+        Retrieves feature importance based on the magnitude of the model coefficients.
+        
+        Returns:
+            Dict[str, float]: Dictionary mapping feature indices to coefficient values.
         """
         if hasattr(self.best_estimator, 'coef_'):
             # Return absolute coefficients as specific importance magnitude, 

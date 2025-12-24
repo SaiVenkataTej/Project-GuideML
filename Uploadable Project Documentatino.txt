@@ -1,0 +1,103 @@
+
+Contents
+Introduction	1
+Purpose	1
+Product Functions	2
+Product Scope	3
+Overall Description	4
+User Interfaces	5
+Assumptions & Dependencies	5
+External Interface Requirements/ Screenshot	6
+Conclusion	7
+
+No table of figures entries found.
+Introduction
+We are in the phase of working and building with AI applications. We use the AI & ML models unknowingly for our daily purpose; it’s become an integral part of us.
+To bridge the gap between complex ML knowledge and practical use, we are implementing a Model Recommender application that simplifies the initial model selection process for users with tabular data. This application serves as a local, high-performance platform designed to execute an automated, standardized Machine Learning pipeline. The goal is to provide users with easy access to evaluate basic ML models based on their datasets, allowing them to get their best models from us without needing specialized coding knowledge. This project emphasizes architectural rigor (modular, OOP design) and performance optimization (concurrency) to deliver fast, validated results and a clear diagnostic report.________________________________________
+Purpose
+The purpose of this project is to engineer and implement a comprehensive, performance-driven local application that completely automates the model selection, optimization, and diagnostic phase of the Machine Learning lifecycle. This platform will leverage an Object-Oriented and Modular design and multiprocessing/multithreading for concurrent execution throughout the entire data preprocessing, concurrent training, and limited hyperparameter tuning pipeline for a fixed suite of traditional ML models. The final application must provide a clear ranked model leaderboard and a comprehensive visualization suite (including data statistics and diagnostic graphs like ROC curves and confusion matrices) to allow the user to quickly identify, validate, and export the best-performing model artifact for immediate use.
+________________________________________
+Product Functions
+These are the strict, minimum set of features (F1-F11) that must be built, serving as the definitive scope of your project.
+1. Data Ingestion and Preprocessing Pipeline
+•	F1. Data Ingestion & Validation: The application must allow the user to upload a single CSV file and perform initial integrity checks to confirm data validity.
+•	F2. Target & Feature Definition: The system must allow the user to select the target variable and automatically designate all other validated columns as feature vectors.
+•	F3. Performance-Optimized Preprocessing: The system must execute essential preprocessing steps, including:
+o	Multithreading Optimization: Using multithreading to optimize the initial I/O-bound phase (file reading and data transformation) for reduced latency.
+o	Pipeline Steps: Implementing basic imputation, One-Hot Encoding, and Feature Scaling.
+•	F4. Stratified Train/Test Split: The system must perform a stratified train-test split (e.g., 80/20) using a fixed random seed.
+2. Model Training, Optimization, and Concurrency
+•	F5. Standardized Model Interface (OOP/Modular): All model logic must be encapsulated within distinct classes inheriting from a BaseModel abstract class. This interface must enforce:
+o	Customizable preprocess(data) methods that call imported modular functions.
+o	Customizable evaluate(X_test, y_test) methods that call imported modular functions.
+•	F6. Concurrent Initial Training: The system must leverage multiprocessing to concurrently initialize, train, and evaluate the fixed suite of 5-7 traditional ML models.
+o	The training must utilize k-fold cross-validation (e.g., k=5).
+•	F7. Limited Hyperparameter Optimization: After initial ranking, the system must automatically apply Hyperparameter Optimization (e.g., Grid Search) to the top 3 models only, within a strictly narrow, pre-defined search space.
+3. Output, Visualization, and Artifact Management
+•	F8. Performance Ranking & Leaderboard: The application must display a final ranked leaderboard of all models (including optimized results), based on the primary metric and at least two other supporting evaluation metrics.
+•	F9. Feature and Data Visualization: The user must be able to view visualizations for data understanding, including histograms/bar charts of key features and a correlation heatmap showing feature-target relationships.
+•	F10. Model Diagnostic Visualization: The system must provide crucial diagnostic graphs for the final best-performing model, including the Receiver Operating Characteristic (ROC) curve and a Confusion Matrix.
+•	F11. Model Artifact Export: The application must facilitate the download of the best-performing, trained model artifact (e.g., a serialized Python pickle file).
+________________________________________
+Product Scope
+This section explicitly defines the features that are out of scope for Version 1 (V1) of the Model Recommender. Building these features is strictly prohibited to maintain an intermediate project level and ensure a timely completion for your portfolio.
+1.	Model and Data Complexity Limits
+S1. Deep Learning Models: The model suite is strictly limited to traditional Machine Learning algorithms (e.g., linear, tree-based, vector machines). No integration of advanced Deep Learning frameworks (TensorFlow, PyTorch, Keras) will be included.
+S2. Advanced Feature Engineering: The application will not implement complex feature engineering techniques such as polynomial feature creation, complex interaction terms, automated dimensionality reduction (PCA, t-SNE), or custom feature creation. Preprocessing is strictly limited to the steps defined in F3.
+S3. Advanced Outlier/Missing Value Treatment: The system will not include automated outlier detection or removal (e.g., IQR capping, Isolation Forest) or advanced imputation strategies (e.g., KNN Imputer). Imputation is limited to mean/mode as defined in F3.
+2.	System and Architecture Limits
+S4. Multi-User Management: The application will not include any form of user accounts, registration, login, or authentication/authorization system. It is designed and scoped as a single-user analysis tool.
+S5. Database Integration: The application will not connect to or manage an external database (relational or NoSQL) for long-term data or model storage.
+S6. Real-Time Processing: The system is designed for batch processing of uploaded data files. There is no requirement for data streaming, continuous ingestion, or real-time model serving.
+S7. Cloud Deployment/Live Hosting: The application will not be deployed to a public cloud platform (e.g., AWS, Azure, Heroku) or include deployment tooling (e.g., Docker, Kubernetes). The final deliverable is the source code repository designed to run locally on a multi-core machine.
+3.	User Interface (UI) Limits
+S8. Advanced UI/UX Customization: The user interface will be built for functionality and clarity using a minimalist, standard framework (CSS/local GUI framework). Complex animations, custom visual themes, or extensive mobile responsiveness testing are excluded.
+________________________________________
+Overall Description
+The purpose of this project is to engineer and implement a comprehensive, performance-driven local application that completely automates the model selection, optimization, and diagnostic phase of the Machine Learning lifecycle. This platform will leverage an Object-Oriented and Modular design and multiprocessing/multithreading for concurrent execution throughout the entire data preprocessing, concurrent training, and limited hyperparameter tuning pipeline for a fixed suite of traditional ML models. The final application must provide a clear ranked model leaderboard and a comprehensive visualization suite (including data statistics and diagnostic graphs like ROC curves and confusion matrices) to allow the user to quickly identify, validate, and export the best-performing model artifact for immediate use.
+________________________________________
+
+
+User Interfaces
+The UI must be functional and present the necessary information for the ML Engineer's workflow, adhering to the minimalist design constraint (S7).
+•	UI1. Upload Interface: A simple, dedicated page with a file upload button (CSV only) and a dropdown menu for selecting the Target Variable.
+•	UI2. Processing Status: A progress indicator that displays the current stage of the pipeline (e.g., "Preprocessing Data," "Training Model X of 7," "Running Hyperparameter Tuning"). This provides feedback during the asynchronous training process.
+•	UI3. Results Dashboard: The main output page, organized into clear, accessible tabs or sections:
+o	Data Summary: Displays the initial features, data types, and the Correlation Heatmap
+o	Model Leaderboard: A clear, sortable table (F8) showing the model’s name, primary metric, and supporting metrics. 
+o	Model Diagnostics: A section that dynamically displays the ROC Curve and Confusion Matrix for the currently best-performing model (F10). 
+o	Export Control: A clear button or link to download the final model artifact (F11).
+________________________________________
+Assumptions & Dependencies
+A1. Operating System: Assumes a standard multi-core operating system (Windows, Linux, or macOS) that supports Python's multiprocessing library for parallel execution.
+A2. Input Data: Assumes the user will provide clean, tabular data in the CSV format that is reasonably sized (e.g., less than 50MB) to ensure timely processing without hitting resource limits.
+A3. Programming Language: Python 3.x (Specific version to be defined, e.g., 3.10+).
+A4. Key Dependencies: The project relies on the following major libraries:
+•	Web Framework: (e.g., Flask or Django) for the user interface.
+•	ML Core: Scikit-learn for all core preprocessing, modeling, cross-validation, and metrics calculations.
+•	Data Handling: Pandas and NumPy.
+•	Visualization: Matplotlib/Seaborn or a similar library for generating static plots (F9, F10).
+________________________________________
+External Interface Requirements/ Screenshot
+This section details all interactions with systems or entities outside your core application logic.
+11.1. User Interface (UI):
+•	UI.1. Design Standard: The application must present all features (F1-F11) using a clean, minimalist, and functional graphical user interface (GUI) or a robust, structured command-line interface (CLI). The interface must be easily navigable through three primary stages: Input/Setup, Training Status, and Results Dashboard.
+•	UI.2. Input Format: The interface must contain a file selection control (or prompt for a file path) that strictly accepts only CSV files.
+•	UI.3. Output Persistence: The system must allow the user to download/save two critical artifacts: the best-performing trained model (F11) and a summary report (e.g., CSV or PDF) of the final model leaderboard (F8).
+11.2. Software Interfaces (APIs and Libraries) 
+•	SI.1. Machine Learning Core: The entire ML pipeline must interface with the Scikit-learn library for all modeling, cross-validation, and metric calculations.
+•	SI.2. Data Handling: Data ingestion and manipulation must interface with the Pandas library (F1-F3).
+•	SI.3. Concurrency: The system must interface with Python's standard libraries, threading and multiprocessing, for I/O and training optimization, respectively.
+•	SI.4. Model Serialization: A standard Python tool (e.g., pickle or joblib) must be used to serialize and export the final model artifact (F11).
+11.3. Communication Interfaces 
+•	CI.1. Local Execution: The application is designed to run locally on a user's machine and requires no external network communication for its core functions (training/evaluation).
+•	CI.2. UI Library Constraint: If a graphical UI is implemented, it will utilize a standard Python library (e.g., Tkinter, PyQt, or a simple visualization library) that operates locally and is not network-dependent.
+
+11.4. Screenshots / Diagrams (Placeholders)
+•	Results Dashboard Visualization Layout: A diagram illustrating the layout of the final output, showing the Model Leaderboard followed by sections for the Correlation Heatmap, Feature Histograms, and the selected model's ROC Curve and Confusion Matrix
+
+•	System Architecture Diagram: A block diagram illustrating the flow of data: 
+User Input (Local UI) -> Data Handler -> Preprocessing Module (Multithreaded I/O) -> Training Orchestrator (Multiprocessing) -> Evaluation Module -> Results Display. The diagram must clearly show the decoupling between the UI and the core ML modules.
+Conclusion
+
+

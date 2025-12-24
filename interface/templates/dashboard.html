@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results Dashboard - Model Recommender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body class="bg-light">
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#">
+                <i class="fas fa-brain me-2 text-primary"></i> GuideML Analysis
+            </a>
+            <a href="/" class="btn btn-outline-light btn-sm rounded-pill px-4">New Analysis</a>
+        </div>
+    </nav>
+
+    <div class="container my-5">
+
+        <!-- Summary Cards -->
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100 summary-card bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="text-white-50 text-uppercase ls-1">Task Inferred</h6>
+                        <h2 class="fw-bold mb-0">{{ results.summary.task }}</h2>
+                        <i class="fas fa-tasks card-icon"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100 summary-card bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="text-white-50 text-uppercase ls-1">Best Model</h6>
+                        <h2 class="fw-bold mb-0">{{ results.summary.best_model }}</h2>
+                        <i class="fas fa-trophy card-icon"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100 summary-card bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="text-white-50 text-uppercase ls-1">{{ results.summary.primary_metric }}</h6>
+                        <h2 class="fw-bold mb-0">{{ "%.4f"|format(results.summary.score) }}</h2>
+                        <i class="fas fa-chart-line card-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Tabs -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
+                <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-semibold" id="leaderboard-tab" data-bs-toggle="tab"
+                            data-bs-target="#leaderboard" type="button" role="tab">
+                            <i class="fas fa-list-ol me-2"></i> Leaderboard
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="diagnostics-tab" data-bs-toggle="tab"
+                            data-bs-target="#diagnostics" type="button" role="tab">
+                            <i class="fas fa-microscope me-2"></i> Diagnostics
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-semibold" id="data-tab" data-bs-toggle="tab" data-bs-target="#data"
+                            type="button" role="tab">
+                            <i class="fas fa-database me-2"></i> Data Insights
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="card-body p-4">
+                <div class="tab-content" id="myTabContent">
+
+                    <!-- Leaderboard Tab -->
+                    <div class="tab-pane fade show active" id="leaderboard" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Model Name</th>
+                                        <th>Metrics</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for res in results.leaderboard %}
+                                    <tr
+                                        class="{{ 'table-success fw-bold' if res.model == results.summary.best_model else '' }}">
+                                        <td>#{{ loop.index }}</td>
+                                        <td>{{ res.model }}</td>
+                                        <td>
+                                            {% if res.status == 'success' %}
+                                            {% for k, v in res.metrics.items() %}
+                                            <span class="badge bg-light text-dark border me-1">{{ k }}: {{
+                                                "%.4f"|format(v) }}</span>
+                                            {% endfor %}
+                                            {% else %}
+                                            <span class="text-danger">{{ res.error }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if res.status == 'success' %}
+                                            <i class="fas fa-check-circle text-success"></i> Success
+                                            {% else %}
+                                            <i class="fas fa-times-circle text-danger"></i> Failed
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 text-end">
+                            <a href="/download_model" class="btn btn-dark btn-lg px-5 rounded-pill">
+                                <i class="fas fa-download me-2"></i> Download Best Model (.pkl)
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Diagnostics Tab -->
+                    <div class="tab-pane fade" id="diagnostics" role="tabpanel">
+                        <h5 class="mb-4">Model Performance Analysis (Best Model)</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm mb-3">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-3">{{ "ROC Curve" if results.summary.task ==
+                                            'CLASSIFICATION' else "Residual Plot" }}</h6>
+                                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}"
+                                            class="img-fluid rounded" alt="Diagnostic 1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm mb-3">
+                                    <div class="card-body text-center">
+                                        <h6 class="text-muted mb-3">{{ "Confusion Matrix" if results.summary.task ==
+                                            'CLASSIFICATION' else "Prediction vs Actual" }}</h6>
+                                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}"
+                                            class="img-fluid rounded" alt="Diagnostic 2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Tab -->
+                    <div class="tab-pane fade" id="data" role="tabpanel">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body text-center">
+                                        <h6 class="fw-bold mb-3">Feature Correlations</h6>
+                                        <img src="{{ url_for('static', filename='images/heatmap.png') }}"
+                                            class="img-fluid rounded" alt="Correlation Heatmap">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body text-center">
+                                        <h6 class="fw-bold mb-3">Feature Distributions</h6>
+                                        <img src="{{ url_for('static', filename='images/histograms.png') }}"
+                                            class="img-fluid rounded" alt="Feature Histograms">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
