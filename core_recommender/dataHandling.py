@@ -21,6 +21,11 @@ def apply_one_hot_encoder(
     """
     Applies One-Hot Encoding to nominal categorical features and returns the transformed DataFrame.
 
+    Rationale:
+    ----------
+    - Standard method to convert categorical text data into numerical format.
+    - Creates independent binary features, preventing the model from assuming a false ordinal relationship.
+
     Args:
         data: DataFrame containing categorical features to be encoded.
         drop_first: If True, drops the first category to avoid multicollinearity (dummy variable trap).
@@ -55,6 +60,11 @@ def apply_ordinal_encoder(
 ) -> pd.DataFrame:
     """
     Applies Ordinal Encoding (integer mapping) to rank-based features and returns the transformed DataFrame.
+
+    Rationale:
+    ----------
+    - Preserves the inherent order of data (e.g., Low < Medium < High).
+    - More memory efficient than One-Hot Encoding for high-cardinality ordinal features.
 
     Args:
         data: DataFrame containing categorical features to be encoded.

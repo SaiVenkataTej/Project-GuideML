@@ -4,6 +4,11 @@ from typing import Dict, Any, Tuple, Optional, List
 from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+
+# Import centralized logger
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
 from sklearn.preprocessing import StandardScaler
 
 # --- PROJECT IMPORTS ---
@@ -29,17 +34,37 @@ class PCAModel(BaseModel):
     """
     A concrete implementation of Principal Component Analysis (PCA) for unsupervised dimensionality reduction.
     
-    This adapter class wraps scikit-learn's PCA transformation into the project's standard 
-    Model interface, allowing it to be executed, evaluated (reconstruction error), and 
-    visualized within the same pipeline as supervised models.
+    Overview:
+    ---------
+    PCA is a statistical procedure that uses an orthogonal transformation to convert a set of observations 
+    of possibly correlated variables into a set of values of linearly uncorrelated variables called 
+    principal components.
+    
+    This implementation adapts PCA into the project's standard `BaseModel` interface, enabling:
+    1. **Integration**: Seamless usage within the main execution engine alongside supervised models.
+    2. **Consistency**: Unified preprocessing (Imputation + Scaling) which is critical for valid PCA.
+    3. **Evaluation**: Reconstruction error metrics to quantify information loss.
+
+    Configuration (`CONFIG`):
+    -------------------------
+    - `n_components`: float|int - 
+        - If float < 1.0 (e.g., 0.95), it represents the threshold of explained variance to retain.
+        - If int >= 1, it represents the exact number of components to keep.
+    - `whiten`: bool - When True, multiply the components mainly by the square root of n_samples and 
+      divide by the singular values to ensure uncorrelated outputs with unit component-wise variances.
+      Useful for subsequent steps like K-Means.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
         """
-        Initializes the PCA model wrapper.
+        Initializes the PCA model wrapper with the specified configuration.
 
         Args:
-            config: Dictionary containing hyperparameters (e.g., 'n_components', 'whiten').
-                    Defaults to the global CONFIG dictionary.
+            config (Dict[str, Any]): 
+                Configuration dictionary containing:
+                - 'n_components': Target variance or component count.
+                - 'whiten': Boolean for whitening option.
+                - 'random_state': Seed for reproducibility.
+                Defaults to the global CONFIG dictionary.
         """
         
         name = "Principal Component Analysis (PCA)"
@@ -54,22 +79,27 @@ class PCAModel(BaseModel):
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series = None) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
-        Constructs and applies the feature pipeline optimized for PCA.
+        Constructs and applies a feature pipeline tailored for PCA.
         
-        Pipeline Steps:
-        1. Numerical: Mean imputation. Standard Scaling (Crucial for PCA).
-        2. Categorical: Dropped (PCA typically handles numerical data). 
-           (Note: OneHot encoding could be added if categorical data is required, but standard practice here focuses on numeric).
+        Rationale:
+        ----------
+        - **Scaling**: PCA seeks to maximize variance. Without Standardization (mean=0, std=1), 
+          variables with larger scales (e.g., Salary) would dominate variables with smaller scales 
+          (e.g., Age), distorting the principal components.
+        - **Imputation**: Mean imputation is used for numerical fields.
+        - **Categorical Data**: PCA is mathematically defined for continuous numerical data. 
+          Categorical features are **dropped** in this pipeline to focus on numerical dimensionality reduction. 
+          Use Multi-Factor Analysis (MFA) or related techniques for mixed data types if needed.
         
         Args:
-            X: Input features DataFrame.
-            y: Target Series (Ignored for PCA, but kept for interface compatibility).
+            X (pd.DataFrame): Input dataframe containing numerical columns for PCA.
+            y (pd.Series, Optional): Target variable. Ignored by PCA but required by the interface.
             
         Returns:
-            Tuple containing:
-            - Transformed feature array (np.ndarray)
-            - Target array (Passed through or dummy)
-            - The fitted ColumnTransformer object
+            Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
+                - **X_transformed**: Standardized and imputed numerical data (ready for PCA fit).
+                - **y_transformed**: Passthrough target data (or dummy array if None).
+                - **preprocessor**: The fitted `ColumnTransformer` (only processing 'num' columns).
         """
         # 1. Pipeline Construction
         # ------------------------
@@ -110,29 +140,33 @@ class PCAModel(BaseModel):
         Fits the PCA transformer on the training data.
         
         Args:
-            X_train: Training features array.
-            y_train: Training target array (Ignored).
+            X_train (np.ndarray): Training features array (standardized).
+            y_train (np.ndarray, optional): Training target array (Ignored).
         """
-        print(f"[{self.name}] Fitting PCA...")
+        logger.debug(f"[{self.name}] Fitting PCA...")
         self.model_instance.fit(X_train)
         self.model = self.model_instance # Assign to self.model for export compatibility
         
         n_comps = self.model_instance.n_components_
         var_ratio = np.sum(self.model_instance.explained_variance_ratio_)
-        print(f"[{self.name}] Fitted with {n_comps} components explaining {var_ratio:.2%} variance.")
+        logger.info(f"[{self.name}] Fitted with {n_comps} components explaining {var_ratio:.2%} variance")
 
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray = None) -> Dict[str, float]:
         """
         Calculates PCA-specific metrics by reconstructing the test data.
         
-        Metrics Include:
-        - Reconstruction RMSE: Loss of information due to reduction.
-        - Explained Variance: Total variance retained by the components.
-        - n_components: Number of components used.
+        Metrics Explained:
+        ------------------
+        - **Reconstruction RMSE**: Routinely used to measure how much information is lost. 
+          Calculated as the RMSE between the original data and the data reconstructed from the 
+          reduced components. Lower is better.
+        - **Explained Variance**: The cumulative variance explained by the selected components. 
+          Higher (closer to 1.0) is generally better, but must be balanced with reduction.
+        - **n_components**: The actual number of components used.
 
         Args:
-            X_test: Test features array.
-            y_test: Test target array (Ignored).
+            X_test (np.ndarray): Test features array (standardized).
+            y_test (np.ndarray, optional): Test target array (Ignored).
             
         Returns:
             Dict[str, float]: Dictionary of calculated metrics.
@@ -156,11 +190,15 @@ class PCAModel(BaseModel):
         Retrieves diagnostic data for visualization (e.g., Scree Plot).
         
         Args:
-            X_test: Test features array.
-            y_test: Test target array (Ignored).
+            X_test (np.ndarray): Test features array.
+            y_test (np.ndarray, optional): Test target array.
             
         Returns:
-            Dict[str, Any]: Dictionary containing variance ratios and singular values.
+            Dict[str, Any]: Dictionary containing:
+                - 'explained_variance_ratio': Array of variance explained by each component.
+                - 'cumulative_variance': Array of cumulative variance explained.
+                - 'singular_values': Singular values corresponding to each component.
+                - 'model_name': Name of the model.
             
         Raises:
             RuntimeError: If the model has not been trained yet.
@@ -176,7 +214,13 @@ class PCAModel(BaseModel):
         """
         Returns the Explained Variance Ratio per component index as a proxy for "importance".
         
+        Note:
+        -----
+        In PCA, "Feature Importance" typically refers to the loading of each original feature on 
+        the principal components, which is a matrix (components x features). 
+        Here, we return the importance *of the components themselves* (explained variance).
+        
         Returns:
-            Dict[str, float]: Dictionary mapping component index to variance explained.
+            Dict[str, float]: Dictionary mapping component index (as str) to variance explained.
         """
         return dict(enumerate(self.model_instance.explained_variance_ratio_))

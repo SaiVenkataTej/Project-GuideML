@@ -16,8 +16,17 @@ This project demonstrates proficiency in advanced software and ML engineering co
 
 * **Concurrency & Performance:** Uses **Joblib/Multiprocessing** to execute training of 10 models simultaneously and **Multithreading** to optimize data I/O.
 * **Architecture (OOP):** Implements a core package (`core_recommender/`) that is decoupled from the UI. All models inherit from a **`BaseModel` abstract class** with customizable `preprocess()` and `evaluate()` methods.
-* **Optimization:** Includes logic for **Limited Hyperparameter Optimization** (Grid Search) applied only to the top 3 best-performing models.
+* **Optimization:** Includes logic for **Bayesian Hyperparameter Optimization** (Optuna) applied to the top-performing models, providing superior tuning compared to traditional Grid Search.
 * **Diagnostics:** Generates crucial diagnostic visualizations for analysis.
+
+## Directory Structure
+* `core_recommender/`: Main package source code.
+* `interface/`: Web application interface.
+* `scripts/`: Utility scripts and demos (e.g., `demo_run.py`).
+* `docs/`: Project documentation, changelogs, and techniques.
+* `logs/`: Execution and error logs.
+* `data/`: Datasets.
+* `tests/`: Unit tests.
 
 ---
 
@@ -27,7 +36,7 @@ The application provides a complete, automated pipeline:
 
 1. **Ingestion & Preprocessing:** Reads a CSV file, handles basic imputation/encoding, and performs a stratified train/test split.
 2. **Concurrent Training:** Trains a fixed suite of traditional ML models concurrently using **multiprocessing** and **k-fold cross-validation**.
-3. **Model Selection & Tuning:** Ranks all models (F8) and applies **Limited Hyperparameter Optimization** to the top 3 models.
+3. **Model Selection & Tuning:** Ranks all models and applies **Bayesian Hyperparameter Optimization** (Optuna) to the best performers.
 4. **Output & Export:** Displays a final ranked leaderboard and a comprehensive visualization suite. Facilitates the download of the best model artifact.
 
 ---
@@ -59,8 +68,8 @@ To maintain a manageable scope and ensure timely completion, the following featu
 
 1.  **Clone the repository:**
     ```bash
-    git clone [Your Repository URL]
-    cd model_recommender_app
+    git clone https://github.com/SaiVenkataTej/Project-GuideML.git
+    cd Project-GuideML
     ```
 2.  **Create and activate the environment:**
     ```bash

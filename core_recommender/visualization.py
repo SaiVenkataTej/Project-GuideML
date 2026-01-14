@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg') # Non-interactive backend for thread safety
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import seaborn as sns
@@ -18,6 +20,11 @@ plt.rcParams['figure.figsize'] = (10, 6)
 def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Optional[str] = None) -> Figure:
     """
     Generates a Seaborn heatmap showing the correlation between all features.
+
+    Rationale:
+    ----------
+    - **Multicollinearity Detection**: Highly correlated features (e.g., > 0.95) can destabilize linear models.
+    - **Feature Selection**: Helps identify which features are strongly related to the target variable.
 
     Args:
         df: DataFrame containing all features and the target.
@@ -106,6 +113,11 @@ def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, sav
     """
     Generates the Receiver Operating Characteristic (ROC) curve to evaluate classifier performance.
 
+    Rationale:
+    ----------
+    - **Trade-off Analysis**: Visualizes the trade-off between True Positive Rate (Sensitivity) and False Positive Rate (1 - Specificity).
+    - **AUC**: The Area Under Curve provides a single scalar value to compare models; 0.5 is random guessing, 1.0 is perfect.
+
     Args:
         y_true: True binary labels (0 or 1).
         y_proba: Target scores, usually the probability of the positive class.
@@ -142,6 +154,11 @@ def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, sav
 def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, classes: np.ndarray, model_name: str, save_path: Optional[str] = None) -> Figure:
     """
     Generates a Seaborn Confusion Matrix heatmap to visualize misclassifications.
+
+    Rationale:
+    ----------
+    - **Error Type Identification**: Shows exactly *how* the model is confused (e.g., False Positives vs False Negatives).
+    - **Class Imbalance**: Reveals if the model is ignoring minority classes.
 
     Args:
         y_true: True labels.
@@ -246,7 +263,7 @@ def plot_coefficient_bar_chart(feature_names: List[str], coefficients: np.ndarra
     coef_df = coef_df.sort_values(by='Value', ascending=True) # Sort again for clean bar layout
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    sns.barplot(x='Value', y='Feature', data=coef_df, ax=ax, palette='vlag') # vlag shows positive/negative clearly
+    sns.barplot(x='Value', y='Feature', data=coef_df, ax=ax, palette='vlag', hue='Feature', legend=False) # vlag shows positive/negative clearly
     
     ax.set_title(f'Top {top_n} Feature Coefficients - {model_name}{title_suffix}', fontsize=14)
     ax.set_xlabel(y_label)

@@ -17,3 +17,4 @@ Flask
 
 # Statistical utilities (For Q-Q Plots)
 scipy
+optuna

@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
+
 # =========================================================================
 # The BaseModel Abstract Class (F5)
 # =========================================================================
@@ -127,4 +132,4 @@ class BaseModel(ABC):
             raise ValueError("Cannot export model: Model has not been trained (fit) yet.")
         
         dump(self.model, filepath)
-        print(f"Model {self.name} successfully exported to {filepath}")
+        logger.info(f"✅ Model {self.name} successfully exported to {filepath}")

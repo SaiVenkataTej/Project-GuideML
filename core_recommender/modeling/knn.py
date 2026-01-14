@@ -9,6 +9,11 @@ from sklearn.preprocessing import LabelEncoder
 import optuna
 import time
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
+
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
 from core_recommender.preprocessing import (
@@ -48,9 +53,14 @@ class KNNModel(BaseModel):
     """
     A concrete implementation of K-Nearest Neighbors (KNN) for both Classification and Regression tasks.
     
+    Rationale:
+    ----------
+    - **Instance-Based Learning**: Makes no assumptions about the underlying data distribution (non-parametric).
+    - **Distance Sensitivity**: Highly sensitive to feature scales, necessitating strict normalization.
+    - **Curse of Dimensionality**: Performance degrades in high dimensions, making PCA/NCA integration critical.
+
     This model utilizes proximity-based predictions. It supports various distance metrics 
     (Euclidean, Manhattan, Minkowski) and weighting schemes (Uniform, Distance-weighted).
-    Dimensionality reduction (PCA/NCA) is integrated to mitigate the "Curse of Dimensionality".
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
         """
@@ -84,6 +94,12 @@ class KNNModel(BaseModel):
         """
         Constructs and applies the feature pipeline optimized for KNN.
         
+        Rationale:
+        ----------
+        - **Scaling is Mandatory**: KNN calculates distances between points. If one feature ranges from 0-1 and another from 0-1000, 
+          the second will dominate the distance metric. Scaling ensures equal contribution.
+        - **Dimensionality Reduction**: Removes noise and irrelevant features to improve neighbor quality.
+        
         Pipeline Steps:
         1. Numerical: Median imputation. Scaling (Standard or MinMax). Dimensionality Reduction (PCA or NCA).
         2. Categorical: Most frequent imputation. One-Hot encoding.
@@ -98,6 +114,9 @@ class KNNModel(BaseModel):
             - Transformed target array (np.ndarray)
             - The fitted ColumnTransformer object
         """
+        logger.debug(f"[{self.name}] Entering preprocess()...")
+        logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
+        
         # 1. Pipeline Construction
         # ------------------------
         
@@ -106,10 +125,13 @@ class KNNModel(BaseModel):
         num_steps.append(('imputer', get_imputer(strategy='median'))) # Median Imput (Req)
         
         # Scaling (Req: MinMax or Standard)
-        if self.config.get('scaler') == 'standard':
+        scaler_type = self.config.get('scaler', 'minmax')
+        if scaler_type == 'standard':
             num_steps.append(('scaler', get_standard_scaler()))
+            logger.debug(f"[{self.name}] Using StandardScaler for feature scaling")
         else:
-             num_steps.append(('scaler', get_minmax_scaler()))
+            num_steps.append(('scaler', get_minmax_scaler()))
+            logger.debug(f"[{self.name}] Using MinMaxScaler for feature scaling")
 
         # Dimensionality Reduction (Req: PCA or NCA)
         reduction_method = self.config.get('reduction', 'pca')
@@ -122,13 +144,16 @@ class KNNModel(BaseModel):
                 # However, NCA expects integer components, not float variance ratio.
                 n_comps_nca = n_components if isinstance(n_components, int) else None 
                 num_steps.append(('nca', get_nca_reducer(n_components=n_comps_nca, random_state=self.config.get('random_state', 42))))
+                logger.debug(f"[{self.name}] Using NCA for dimensionality reduction (n_components={n_comps_nca})")
             else:
                 # Fallback to PCA for Regression if NCA requested (NCA is supervised classif mostly)
-                print("Warning: NCA is for classification. Using PCA for regression.")
+                logger.warning("⚠️ NCA is for classification only. Falling back to PCA for regression task.")
                 num_steps.append(('pca', get_pca_reducer(n_components=n_components)))
+                logger.debug(f"[{self.name}] Fallback: Using PCA for dimensionality reduction (n_components={n_components})")
                 
         elif reduction_method == 'pca':
             num_steps.append(('pca', get_pca_reducer(n_components=n_components)))
+            logger.debug(f"[{self.name}] Using PCA for dimensionality reduction (n_components={n_components})")
 
         numerical_pipeline = Pipeline(steps=num_steps)
 
@@ -151,91 +176,95 @@ class KNNModel(BaseModel):
             n_jobs=self.config.get('n_jobs', -1)
         )
 
-        # 3. Fit-Transform
-        # ----------------
-        # NCA needs y!
-        # preprocessor.fit_transform(X, y) will pass y to underlying steps if they accept it.
-        # ColumnTransformer passes y to steps. Pipeline passes y to steps.
-        # So NCA step will receive y.
+        self.preprocessor = preprocessor
+        logger.debug(f"[{self.name}] Preprocessor pipeline constructed.")
+
+        # We return fitted for initial summary, but fit() will clone and re-fit.
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
+        logger.debug(f"[{self.name}] Features transformed. New shape: {X_transformed.shape}")
 
-        # 4. Target Processing
-        # --------------------
+        # 4. Target Processing (Skip if already numeric/pre-encoded by Executor)
         if self.is_classification:
-            le = LabelEncoder()
-            y_transformed = le.fit_transform(y)
-            self.label_encoder = le
+            if not np.issubdtype(y.dtype, np.number):
+                le = LabelEncoder()
+                y_transformed = le.fit_transform(y)
+                self.label_encoder = le
+                logger.debug(f"[{self.name}] Target variable LabelEncoded.")
+            else:
+                y_transformed = y.values
+                self.label_encoder = None
+                logger.debug(f"[{self.name}] Target variable already numeric.")
         else:
             y_transformed = y.values
             self.label_encoder = None
+            logger.debug(f"[{self.name}] Target variable for regression (no encoding).")
 
+        logger.debug(f"[{self.name}] Preprocessing complete. Output shapes: X={X_transformed.shape}, y={y_transformed.shape}")
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
         """
-        Trains the KNN model using the configured optimization strategy.
-        Delegates to core_recommender.tuning for modular execution.
+        Trains the KNN model using a Unified Pipeline to prevent data leakage.
+        """
+        logger.info(f"[{self.name}] Starting training...")
+        logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        Args:
-            X_train: Training features array.
-            y_train: Training target array.
-        """
-        from core_recommender.tuning import (
-            get_grid_search_tuner, 
-            run_optuna_optimization
-        )
+        from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score
+        from sklearn.base import clone
+        import optuna
 
         # 1. Setup Cross-Validation
         if self.is_classification:
-            cv = StratifiedKFold(
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
+            cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
             scoring = 'accuracy'
+            base_cls = KNeighborsClassifier
+            logger.debug(f"[{self.name}] Classification task: Using StratifiedKFold with scoring='{scoring}'")
         else:
-            cv = KFold(
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
+            cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
             scoring = 'neg_mean_absolute_error'
+            base_cls = KNeighborsRegressor
+            logger.debug(f"[{self.name}] Regression task: Using KFold with scoring='{scoring}'")
 
-        # 2. Select & Run Strategy
-        strategy = self.config.get('tuning_strategy', 'optuna')
-        print(f"[{self.name}] Starting Training with {strategy.upper()} strategy...")
+        # 2. Pipeline-based Tuning
+        preprocessor_template = clone(self.preprocessor)
+        logger.debug(f"[{self.name}] Cloned preprocessor for pipeline-based tuning.")
+        
+        def pipeline_objective(trial):
+            params = self._get_optuna_space(trial)
+            model_inst = base_cls(**params, n_jobs=self.config.get('n_jobs', -1))
+            
+            pipe = Pipeline(steps=[
+                ('pre', preprocessor_template),
+                ('model', model_inst)
+            ])
+            
+            scores = cross_val_score(pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=self.config.get('n_jobs', -1))
+            return scores.mean()
 
-        if strategy == 'optuna':
-            # Use the functional executor from tuning.py
-            self.best_estimator = run_optuna_optimization(
-                estimator_class=KNeighborsClassifier if self.is_classification else KNeighborsRegressor,
-                param_space_func=self._get_optuna_space,
-                X=X_train,
-                y=y_train,
-                cv=cv,
-                scoring=scoring,
-                n_trials=self.config.get('n_trials', 20),
-                n_jobs=self.config.get('n_jobs', -1),
-                random_state=self.config.get('random_state', 42)
-            )
-            if hasattr(self.best_estimator, 'study_'):
-                 self.study = self.best_estimator.study_
-
-        elif strategy == 'grid':
-            # Use the factory from tuning.py
-            grid_search = get_grid_search_tuner(
-                estimator=self.model_instance,
-                param_grid=self.param_grid,
-                cv=cv,
-                scoring=scoring,
-                n_jobs=self.config.get('n_jobs', -1)
-            )
-            grid_search.fit(X_train, y_train)
-            self.best_estimator = grid_search.best_estimator_
-            self.model = grid_search # For accessing cv_results_ if needed
-
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        logger.debug(f"[{self.name}] Starting Optuna optimization (n_trials={self.config.get('n_trials', 15)})...")
+        study = optuna.create_study(direction='maximize')
+        study.optimize(pipeline_objective, n_trials=self.config.get('n_trials', 15))
+        
+        # 3. Build Best Model
+        best_params = study.best_params
+        best_model_inst = base_cls(**best_params, n_jobs=self.config.get('n_jobs', -1))
+        
+        self.best_estimator = Pipeline(steps=[
+            ('pre', preprocessor_template),
+            ('model', best_model_inst)
+        ])
+        self.best_estimator.fit(X_train, y_train)
+        
+        self.study = study
         self.model = self.best_estimator
+        
+        best_score = study.best_value
+        best_params = study.best_params
+        logger.info(f"✅ [{self.name}] Training complete")
+        logger.info(f"[{self.name}] Best CV Score: {best_score:.4f}")
+        logger.debug(f"[{self.name}] Best params: {best_params}")
 
     def _get_optuna_space(self, trial):
         """Defines the search space for Optuna."""
@@ -248,65 +277,50 @@ class KNNModel(BaseModel):
             'metric': trial.suggest_categorical('metric', self.param_grid.get('metric', ['euclidean']))
         }
 
-    def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates performance metrics including Prediction Latency.
-
-        Metrics Include:
-        - Accuracy, F1 Score, MAE (Classification)
-        - MAE, RMSE (Regression)
-        - Prediction Latency (seconds)
-
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, float]: Dictionary of calculated metrics.
+        Calculates performance metrics using the full Pipeline.
         """
         y_pred = self.best_estimator.predict(X_test)
         
         metrics = {}
         
-        # Latency (Req)
+        # Latency (Access model directly for latency test if needed, or pipe)
         metrics['Prediction Latency (s)'] = measure_prediction_latency(self.best_estimator, X_test)
 
         if self.is_classification:
-            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) # Req
-            # Add F1 too as it's standard
+            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) 
             metrics['F1 Score'] = calculate_f1_score(y_test, y_pred, average='weighted')
-            # Technically MAE can be calc for classif if encoded, but usually not primary.
-            # User req table showed Accuracy and MAE.
             metrics['MAE'] = calculate_mae(y_test, y_pred) 
         else:
-            metrics['MAE'] = calculate_mae(y_test, y_pred) # Req
+            metrics['MAE'] = calculate_mae(y_test, y_pred) 
             metrics['RMSE'] = calculate_rmse(y_test, y_pred)
         
         return metrics
 
-    def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+    def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Retrieves diagnostic data for visualization.
-        
-        Includes data from Optuna study if available.
+        Retrieves diagnostic data for visualization using the Pipeline.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
         
-        # Decision Boundary Data (for 2D projection later)
         y_pred = self.best_estimator.predict(X_test)
+        
+        # Access steps
+        final_model = self.best_estimator.named_steps['model']
+        pre_step = self.best_estimator.named_steps['pre']
+        X_test_proc = pre_step.transform(X_test)
 
-        # Local Neighbor Inspection (Req)
-        # Find neighbors for a few test samples (first 5)
-        distances, indices = self.best_estimator.kneighbors(X_test[:5])
+        # Local Neighbor Inspection
+        distances, indices = final_model.kneighbors(X_test_proc[:5])
 
-        # Elbow Plot Data (for Visualization)
+        # Elbow Plot Data
         elbow_data = []
         best_k = None
         
         if hasattr(self, 'study'):
             trials_df = self.study.trials_dataframe()
-            # Visualize Score vs n_neighbors
             if 'params_n_neighbors' in trials_df.columns:
                 elbow_df = trials_df[['params_n_neighbors', 'value']].rename(
                     columns={'params_n_neighbors': 'param_estimator__n_neighbors', 'value': 'mean_test_score'}
@@ -316,18 +330,6 @@ class KNNModel(BaseModel):
             
             best_k = self.study.best_params.get('n_neighbors')
         
-        # If using GridSearch (fallback or explicit choice)
-        elif hasattr(self.model, 'cv_results_'):
-             results_df = pd.DataFrame(self.model.cv_results_)
-             # Ensure 'param_estimator__n_neighbors' is present, or adapt if param_grid keys are used directly
-             if 'param_n_neighbors' in results_df.columns: # For GridSearch, params are usually prefixed with 'param_'
-                 elbow_df = results_df[['param_n_neighbors', 'mean_test_score', 'std_test_score']].rename(
-                     columns={'param_n_neighbors': 'param_estimator__n_neighbors'}
-                 )
-                 elbow_data = elbow_df.sort_values(by='param_estimator__n_neighbors').to_dict(orient='records')
-             best_k = self.model.best_params_.get('n_neighbors')
-
-
         return {
             'y_pred': y_pred,
             'y_test': y_test,
@@ -342,8 +344,27 @@ class KNNModel(BaseModel):
         """
         KNN does not provide global feature importance scores as it is a distance-based, 
         instance-based learning algorithm (lazy learner).
-
-        Returns:
-            Dict[str, float]: Empty dictionary.
         """
         return {}
+
+    def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """
+        Returns descriptions of the most important tuned parameters.
+        """
+        final_model = self.best_estimator.named_steps['model']
+        params = final_model.get_params()
+        descriptions = {
+            'n_neighbors': {
+                'value': str(params.get('n_neighbors')),
+                'desc': 'The number of nearest neighbors used to make a prediction. Choosing the right value helps balance noise vs. local detail.'
+            },
+            'metric': {
+                'value': str(params.get('metric')),
+                'desc': 'The distance metric used to calculate similarity between points (e.g., Euclidean or Manhattan distance).'
+            },
+            'weights': {
+                'value': str(params.get('weights')),
+                'desc': 'How neighbors are weighted. "Uniform" treats all neighbors equally, while "distance" gives more weight to closer points.'
+            }
+        }
+        return descriptions

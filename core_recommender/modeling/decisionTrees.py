@@ -23,6 +23,10 @@ from core_recommender.evaluation import (
     get_leaf_count
 )
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+logger = get_logger(__name__)
+
 # --- DEFAULT CONFIGURATION ---
 CONFIG = {
     'criterion': 'gini',       # 'gini', 'entropy' (classif) / 'squared_error' (reg)
@@ -46,9 +50,14 @@ class DecisionTreeModel(BaseModel):
     """
     A concrete implementation of Decision Trees for both Classification and Regression tasks.
     
-    This model supports Cost-Complexity Pruning (CCP) to control overfitting and 
-    integrates specialized tree metrics such as depth and leaf count. It handles 
-    data preprocessing, training, and evaluation within the standardized pipeline.
+    Rationale:
+    ----------
+    - **Non-Linear Relationships**: Capable of capturing complex, non-linear patterns without explicit feature combinations.
+    - **Interpretability**: One of the most explainable models; decisions can be visualized as a flowchart.
+    - **No Scaling Required**: Trees are invariant to monotonic transformations, so scaling is not strictly necessary (though used here for pipeline consistency).
+
+    This model supports Cost-Complexity Pruning (CCP) to control overfitting and integrates 
+    specialized tree metrics such as depth and leaf count.
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
         """
@@ -96,6 +105,11 @@ class DecisionTreeModel(BaseModel):
         """
         Constructs and applies the feature pipeline optimized for Decision Trees.
         
+        Rationale:
+        ----------
+        - **Label Encoding**: Trees handle categorical data naturally, but scikit-learn requires numerical inputs.
+        - **Imputation**: Missing values must be handled; Median/Mode is a robust baseline.
+        
         Pipeline Steps:
         1. Numerical: Median imputation. Variance threshold or SelectKBest feature selection.
         2. Categorical: Most frequent imputation. One-Hot or Ordinal encoding.
@@ -110,6 +124,9 @@ class DecisionTreeModel(BaseModel):
             - Transformed target array (np.ndarray)
             - The fitted ColumnTransformer object
         """
+        logger.debug(f"[{self.name}] Entering preprocess()...")
+        logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
+        
         # 1. Pipeline Construction
         # ------------------------
         
@@ -122,11 +139,13 @@ class DecisionTreeModel(BaseModel):
         # But 'SelectKBest' was explicitly requested.
         
         if self.config.get('feature_selection') == 'variance':
-             num_steps.append(('variance_threshold', get_variance_threshold()))
+            num_steps.append(('variance_threshold', get_variance_threshold()))
+            logger.debug(f"[{self.name}] Using VarianceThreshold feature selection")
         elif self.config.get('feature_selection') == 'k_best':
-             # SelectKBest requires target y. fit_transform handles this.
-             score_func = 'f_classif' if self.is_classification else 'f_regression'
-             num_steps.append(('select_k_best', get_select_k_best(k=self.config.get('k_best', 10), score_func=score_func)))
+            # SelectKBest requires target y. fit_transform handles this.
+            score_func = 'f_classif' if self.is_classification else 'f_regression'
+            num_steps.append(('select_k_best', get_select_k_best(k=self.config.get('k_best', 10), score_func=score_func)))
+            logger.debug(f"[{self.name}] Using SelectKBest feature selection (k={self.config.get('k_best', 10)})")
 
         numerical_pipeline = Pipeline(steps=num_steps)
 
@@ -136,9 +155,11 @@ class DecisionTreeModel(BaseModel):
         
         # Encoding (Req: OneHot or Ordinal)
         if self.config.get('encoding') == 'ordinal':
-             cat_steps.append(('ordinal', get_ordinal_encoder()))
+            cat_steps.append(('ordinal', get_ordinal_encoder()))
+            logger.debug(f"[{self.name}] Using Ordinal Encoding for categorical features")
         else:
-             cat_steps.append(('onehot', get_one_hot_encoder(handle_unknown='ignore', sparse_output=False)))
+            cat_steps.append(('onehot', get_one_hot_encoder(handle_unknown='ignore', sparse_output=False)))
+            logger.debug(f"[{self.name}] Using One-Hot Encoding for categorical features")
         
         cat_pipeline = Pipeline(steps=cat_steps)
 
@@ -152,143 +173,124 @@ class DecisionTreeModel(BaseModel):
             remainder='drop',
             n_jobs=self.config.get('n_jobs', -1)
         )
+        logger.debug(f"[{self.name}] ColumnTransformer created with numerical and categorical pipelines.")
 
-        # 3. Fit-Transform
-        # ----------------
+        self.preprocessor = preprocessor
+
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
+        logger.debug(f"[{self.name}] Features transformed. New shape: {X_transformed.shape}")
 
-        # 4. Target Processing
-        # --------------------
         if self.is_classification:
-            le = LabelEncoder()
-            y_transformed = le.fit_transform(y)
-            self.label_encoder = le
+            if not np.issubdtype(y.dtype, np.number):
+                le = LabelEncoder()
+                y_transformed = le.fit_transform(y)
+                self.label_encoder = le
+                logger.debug(f"[{self.name}] Target variable LabelEncoded.")
+            else:
+                y_transformed = y.values
+                self.label_encoder = None
         else:
             y_transformed = y.values
             self.label_encoder = None
-
+        logger.debug(f"[{self.name}] Preprocessing complete.")
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
         """
-        Trains the Decision Tree model using RandomizedSearchCV (Tier 2).
+        Trains the Decision Tree model using a Unified Pipeline to prevent data leakage.
+        """
+        logger.info(f"[{self.name}] Starting training...")
+        logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        Args:
-            X_train: Training features array.
-            y_train: Training target array.
-        """
-        from core_recommender.tuning import get_random_search_tuner
+        # 1. Pipeline Construction
+        preprocessor_template = clone(self.preprocessor)
+        pipe = Pipeline(steps=[
+            ('pre', preprocessor_template),
+            ('model', self.model_instance)
+        ])
+        logger.debug(f"[{self.name}] Pipeline created with preprocessor and model instance.")
 
+        # 2. Adjust Param Grid
+        pipeline_params = {f'model__{k}': v for k, v in self.param_grid.items()}
+        logger.debug(f"[{self.name}] Parameter grid for RandomizedSearchCV: {pipeline_params}")
+
+        # 3. CV Strategy
         if self.is_classification:
-            cv = StratifiedKFold( # Stratified K-Fold (Req)
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
+            cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
             scoring = 'accuracy'
+            logger.debug(f"[{self.name}] Using StratifiedKFold for classification with {self.config.get('cv_folds', 5)} folds and 'accuracy' scoring.")
         else:
-            cv = KFold(
-                n_splits=self.config.get('cv_folds', 5),
-                shuffle=True,
-                random_state=self.config.get('random_state', 42)
-            )
+            cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
             scoring = 'neg_root_mean_squared_error'
+            logger.debug(f"[{self.name}] Using KFold for regression with {self.config.get('cv_folds', 5)} folds and 'neg_root_mean_squared_error' scoring.")
 
-        # Tier 2: Randomized Search
-        # Uses param_grid as distribution (RandomizedSearchCV accepts list of values)
-        # Note: Scikit's RandomizedSearchCV accepts a dict of lists just fine (samples uniformly).
-        self.model = get_random_search_tuner(
-            estimator=self.model_instance,
-            param_distributions=self.param_grid,
+        # 4. Randomized Search on Pipeline
+        random_search = RandomizedSearchCV(
+            estimator=pipe,
+            param_distributions=pipeline_params,
             cv=cv,
             scoring=scoring,
-            n_iter=self.config.get('n_iter', 10), # Default 10 samples
+            n_iter=self.config.get('n_iter', 10),
             n_jobs=self.config.get('n_jobs', -1),
             random_state=self.config.get('random_state', 42)
         )
+        logger.debug(f"[{self.name}] Starting RandomizedSearchCV with n_iter={self.config.get('n_iter', 10)}.")
 
-        print(f"[{self.name}] Starting RandomizedSearchCV (Tier 2)...")
-        self.model.fit(X_train, y_train)
+        random_search.fit(X_train, y_train)
         
-        self.best_estimator = self.model.best_estimator_
-        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
+        self.best_estimator = random_search.best_estimator_
+        self.model = random_search
         
-        # Pruning check
-        ccp_alpha = self.best_estimator.ccp_alpha
-        if ccp_alpha > 0:
-             print(f"[{self.name}] Tree pruned with ccp_alpha={ccp_alpha}")
+        best_score = random_search.best_score_
+        best_params = random_search.best_params_
+        logger.info(f"✅ [{self.name}] Training complete")
+        logger.info(f"[{self.name}] Best CV Score: {best_score:.4f}")
+        logger.debug(f"[{self.name}] Best params: {best_params}")
 
-    def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates standard performance metrics and specific tree complexity metrics.
-
-        Metrics Include:
-        - Accuracy (Classification) or RMSE (Regression)
-        - Tree Depth
-        - Leaf Count
-
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, float]: Dictionary of calculated metrics.
+        Calculates performance metrics using the full Pipeline.
         """
         y_pred = self.best_estimator.predict(X_test)
         
         metrics = {}
+        final_tree = self.best_estimator.named_steps['model']
         
-        # Tree Complexity Metrics (Req)
-        metrics['Tree Depth'] = get_tree_depth(self.best_estimator)
-        metrics['Leaf Count'] = get_leaf_count(self.best_estimator)
+        # Tree Complexity Metrics
+        metrics['Tree Depth'] = get_tree_depth(final_tree)
+        metrics['Leaf Count'] = get_leaf_count(final_tree)
 
         if self.is_classification:
-            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) # Req
+            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) 
         else:
-            metrics['RMSE'] = calculate_rmse(y_test, y_pred) # Req
+            metrics['RMSE'] = calculate_rmse(y_test, y_pred) 
         
         return metrics
 
-    def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+    def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Retrieves diagnostic data for visualization.
-        
-        Includes:
-        - Predictions and Truth values
-        - Feature Importance
-        - Graphviz source code for tree visualization
-        - Validation curve data (extracted from GridSearch results)
-        
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, Any]: Data dictionary for the visualization module.
-            
-        Raises:
-            RuntimeError: If the model has not been trained yet.
+        Retrieves diagnostic data for visualization using the Pipeline.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
         
         y_pred = self.best_estimator.predict(X_test)
+        final_tree = self.best_estimator.named_steps['model']
         
-        # Graphviz Source (Req)
+        # Graphviz Source
         dot_data = export_graphviz(
-            self.best_estimator,
+            final_tree,
             out_file=None,
             filled=True,
             rounded=True,
             special_characters=True
         )
 
-        # Validation Curve Data (Depth vs Score)
-        # We can extract this from cv_results_ for 'max_depth' param
+        # Validation Curve Data
         results_df = pd.DataFrame(self.model.cv_results_)
-        if 'param_estimator__max_depth' in results_df.columns:
-             val_curve_data = results_df[['param_estimator__max_depth', 'mean_test_score', 'std_test_score']].to_dict(orient='records')
+        if 'param_model__max_depth' in results_df.columns:
+             val_curve_data = results_df[['param_model__max_depth', 'mean_test_score', 'std_test_score']].to_dict(orient='records')
         else:
              val_curve_data = []
 
@@ -304,13 +306,8 @@ class DecisionTreeModel(BaseModel):
     def get_feature_importance(self) -> Dict[str, float]:
         """
         Retrieves the Gini Importance (Feature Importance) from the trained tree.
-        
-        Returns:
-            Dict[str, float]: Dictionary mapping feature indices to their importance scores.
         """
-        if hasattr(self.best_estimator, 'feature_importances_'):
-            # Note: We need feature names to make this mapped dict useful.
-            # In this architecture, names are lost in numpy arrays unless preserved.
-            # Returning raw list/dict with indices if possible.
-            return dict(enumerate(self.best_estimator.feature_importances_))
+        final_tree = self.best_estimator.named_steps['model']
+        if hasattr(final_tree, 'feature_importances_'):
+            return dict(enumerate(final_tree.feature_importances_))
         return {}

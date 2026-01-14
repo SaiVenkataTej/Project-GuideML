@@ -26,12 +26,12 @@
     <div class="container my-5">
 
         <!-- Summary Cards -->
-        <div class="row g-4 mb-5">
+        <div class="row g-4 mb-4">
             <div class="col-md-4">
                 <div class="card border-0 shadow-sm h-100 summary-card bg-primary text-white">
                     <div class="card-body">
                         <h6 class="text-white-50 text-uppercase ls-1">Task Inferred</h6>
-                        <h2 class="fw-bold mb-0">{{ results.summary.task }}</h2>
+                        <h2 class="fw-bold mb-0 text-white">{{ results.summary.task }}</h2>
                         <i class="fas fa-tasks card-icon"></i>
                     </div>
                 </div>
@@ -40,7 +40,7 @@
                 <div class="card border-0 shadow-sm h-100 summary-card bg-success text-white">
                     <div class="card-body">
                         <h6 class="text-white-50 text-uppercase ls-1">Best Model</h6>
-                        <h2 class="fw-bold mb-0">{{ results.summary.best_model }}</h2>
+                        <h2 class="fw-bold mb-0 text-white">{{ results.summary.best_model }}</h2>
                         <i class="fas fa-trophy card-icon"></i>
                     </div>
                 </div>
@@ -49,141 +49,277 @@
                 <div class="card border-0 shadow-sm h-100 summary-card bg-info text-white">
                     <div class="card-body">
                         <h6 class="text-white-50 text-uppercase ls-1">{{ results.summary.primary_metric }}</h6>
-                        <h2 class="fw-bold mb-0">{{ "%.4f"|format(results.summary.score) }}</h2>
+                        <h2 class="fw-bold mb-0 text-white">{{ "%.4f"|format(results.summary.score or 0.0) }}</h2>
                         <i class="fas fa-chart-line card-icon"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Main Content Tabs -->
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-0 pt-4 px-4 pb-0">
-                <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active fw-semibold" id="leaderboard-tab" data-bs-toggle="tab"
-                            data-bs-target="#leaderboard" type="button" role="tab">
-                            <i class="fas fa-list-ol me-2"></i> Leaderboard
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-semibold" id="diagnostics-tab" data-bs-toggle="tab"
-                            data-bs-target="#diagnostics" type="button" role="tab">
-                            <i class="fas fa-microscope me-2"></i> Diagnostics
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link fw-semibold" id="data-tab" data-bs-toggle="tab" data-bs-target="#data"
-                            type="button" role="tab">
-                            <i class="fas fa-database me-2"></i> Data Insights
-                        </button>
-                    </li>
-                </ul>
+        <!-- Leaderboard Table -->
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-list-ol text-primary me-2"></i> Model Leaderboard</h5>
             </div>
-
-            <div class="card-body p-4">
-                <div class="tab-content" id="myTabContent">
-
-                    <!-- Leaderboard Tab -->
-                    <div class="tab-pane fade show active" id="leaderboard" role="tabpanel">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Rank</th>
-                                        <th>Model Name</th>
-                                        <th>Metrics</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for res in results.leaderboard %}
-                                    <tr
-                                        class="{{ 'table-success fw-bold' if res.model == results.summary.best_model else '' }}">
-                                        <td>#{{ loop.index }}</td>
-                                        <td>{{ res.model }}</td>
-                                        <td>
-                                            {% if res.status == 'success' %}
-                                            {% for k, v in res.metrics.items() %}
-                                            <span class="badge bg-light text-dark border me-1">{{ k }}: {{
-                                                "%.4f"|format(v) }}</span>
-                                            {% endfor %}
-                                            {% else %}
-                                            <span class="text-danger">{{ res.error }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if res.status == 'success' %}
-                                            <i class="fas fa-check-circle text-success"></i> Success
-                                            {% else %}
-                                            <i class="fas fa-times-circle text-danger"></i> Failed
-                                            {% endif %}
-                                        </td>
-                                    </tr>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Rank</th>
+                                <th>Model Name</th>
+                                <th>Metrics</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for res in results.leaderboard %}
+                            <tr
+                                class="{{ 'table-success fw-bold' if res.model == results.summary.best_model else '' }}">
+                                <td>#{{ loop.index }}</td>
+                                <td>{{ res.model }}</td>
+                                <td>
+                                    {% if res.status == 'success' %}
+                                    {% for k, v in res.metrics.items() %}
+                                    <span class="badge bg-light text-dark border me-1">{{ k }}: {{ "%.4f"|format(v or
+                                        0.0) }}</span>
                                     {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="mt-4 text-end">
-                            <a href="/download_model" class="btn btn-dark btn-lg px-5 rounded-pill">
-                                <i class="fas fa-download me-2"></i> Download Best Model (.pkl)
-                            </a>
-                        </div>
-                    </div>
-
-                    <!-- Diagnostics Tab -->
-                    <div class="tab-pane fade" id="diagnostics" role="tabpanel">
-                        <h5 class="mb-4">Model Performance Analysis (Best Model)</h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="card border-0 shadow-sm mb-3">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted mb-3">{{ "ROC Curve" if results.summary.task ==
-                                            'CLASSIFICATION' else "Residual Plot" }}</h6>
-                                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}"
-                                            class="img-fluid rounded" alt="Diagnostic 1">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card border-0 shadow-sm mb-3">
-                                    <div class="card-body text-center">
-                                        <h6 class="text-muted mb-3">{{ "Confusion Matrix" if results.summary.task ==
-                                            'CLASSIFICATION' else "Prediction vs Actual" }}</h6>
-                                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}"
-                                            class="img-fluid rounded" alt="Diagnostic 2">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Data Tab -->
-                    <div class="tab-pane fade" id="data" role="tabpanel">
-                        <div class="row g-4">
-                            <div class="col-12">
-                                <div class="card border-0 shadow-sm">
-                                    <div class="card-body text-center">
-                                        <h6 class="fw-bold mb-3">Feature Correlations</h6>
-                                        <img src="{{ url_for('static', filename='images/heatmap.png') }}"
-                                            class="img-fluid rounded" alt="Correlation Heatmap">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="card border-0 shadow-sm">
-                                    <div class="card-body text-center">
-                                        <h6 class="fw-bold mb-3">Feature Distributions</h6>
-                                        <img src="{{ url_for('static', filename='images/histograms.png') }}"
-                                            class="img-fluid rounded" alt="Feature Histograms">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+                                    {% else %}
+                                    <span class="text-danger">{{ res.error }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if res.status == 'success' %}
+                                    <i class="fas fa-check-circle text-success"></i> Success
+                                    {% else %}
+                                    <i class="fas fa-times-circle text-danger"></i> Failed
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
+        </div>
+
+        <!-- Model DNA (Parameters) Section -->
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-fingerprint text-primary me-2"></i> Model DNA (Tuned
+                    Parameters)</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-4">The following configuration was automatically optimized by the pipeline
+                    to achieve the highest possible accuracy for your data.</p>
+                <div class="row g-3">
+                    {% for p_name, p_info in results.explainability.parameters.items() %}
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded h-100 bg-light">
+                            <h6 class="fw-bold text-primary mb-1">{{ p_name }}</h6>
+                            <div class="badge bg-white text-dark border mb-2">{{ p_info.value }}</div>
+                            <p class="mb-0 x-small text-muted">{{ p_info.desc }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% if not results.explainability.parameters %}
+                    <div class="col-12 text-center py-3">
+                        <p class="text-muted italic">No specific parameter descriptions available for this model.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Insights Section -->
+        <div class="mb-5">
+            <div class="d-flex align-items-center mb-4">
+                <h3 class="fw-bold mb-0"><i class="fas fa-microscope text-primary me-2"></i> Performance &
+                    Explainability</h3>
+                <span class="badge bg-soft-primary text-primary ms-3 rounded-pill px-3">Expert View</span>
+            </div>
+
+            <!-- Feature Impact -->
+            {% if results.images.importance %}
+            <div class="diag-section">
+                <div class="row align-items-center">
+                    <div class="col-md-7 text-center">
+                        <img src="{{ url_for('static', filename='images/feature_importance.png') }}"
+                            class="uniform-diag-img shadow-sm border" alt="Feature Impact">
+                    </div>
+                    <div class="col-md-5">
+                        <div class="info-box shadow-sm">
+                            <h5 class="info-title">
+                                <i class="fas fa-bolt"></i> Feature Impact Analysis
+                            </h5>
+                            <p class="text-muted small">
+                                This chart identifies which variables had the most significant influence on the model's
+                                predictions.
+                                <strong>Higher bars indicate features that the model relied on more heavily.</strong>
+                            </p>
+                            <p class="text-muted small mb-0">
+                                Understanding these features helps you identify the core drivers in your dataset,
+                                whether it's location, size, or specific categorical traits.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Diagnostic 1 -->
+            <div class="diag-section">
+                <div class="row align-items-center">
+                    <div class="col-md-5 order-2 order-md-1">
+                        <div class="info-box shadow-sm">
+                            <h5 class="info-title">
+                                <i class="fas fa-chart-area"></i>
+                                {{ "How to Read: ROC Curve" if results.summary.task == 'CLASSIFICATION' else "How to
+                                Read: Residuals" }}
+                            </h5>
+                            {% if results.summary.task == 'CLASSIFICATION' %}
+                            <p class="text-muted small">
+                                The ROC curve plots the <strong>True Positive Rate</strong> vs. the <strong>False
+                                    Positive Rate</strong> at various thresholds.
+                            </p>
+                            <ul class="text-muted x-small">
+                                <li><strong>The Goal</strong>: A curve that "hugs" the top-left corner.</li>
+                                <li><strong>AUC (Area Under Curve)</strong>: 1.0 is perfect; 0.5 is no better than
+                                    guessing.</li>
+                            </ul>
+                            <div class="alert alert-light border small py-2 mb-0">
+                                <i class="fas fa-info-circle text-primary"></i> If the line is diagonal, the model is
+                                making random guesses.
+                            </div>
+                            {% else %}
+                            <p class="text-muted small">
+                                Residuals show the distance between the model's guess and the actual truth.
+                            </p>
+                            <ul class="text-muted x-small">
+                                <li><strong>Symmetry</strong>: Points should be balanced above and below the zero line.
+                                </li>
+                                <li><strong>Clusters</strong>: If points cluster at one end, the model may be biased for
+                                    low or high values.</li>
+                            </ul>
+                            <div class="alert alert-light border small py-2 mb-0">
+                                <i class="fas fa-info-circle text-primary"></i> A random cloud is good; a visible
+                                "shape" means the model can be improved.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-7 text-center order-1 order-md-2">
+                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}"
+                            class="uniform-diag-img shadow-sm border" alt="Diagnostic 1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnostic 2 -->
+            <div class="diag-section">
+                <div class="row align-items-center">
+                    <div class="col-md-7 text-center">
+                        <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}"
+                            class="uniform-diag-img shadow-sm border" alt="Diagnostic 2">
+                    </div>
+                    <div class="col-md-5">
+                        <div class="info-box shadow-sm">
+                            <h5 class="info-title">
+                                <i class="fas fa-bullseye"></i>
+                                {{ "Understanding: Confusion Matrix" if results.summary.task == 'CLASSIFICATION' else
+                                "Understanding: Predictions" }}
+                            </h5>
+                            {% if results.summary.task == 'CLASSIFICATION' %}
+                            <p class="text-muted small">
+                                This matrix tells you exactly which classes the model is confusing.
+                            </p>
+                            <ul class="text-muted x-small">
+                                <li><strong>Vertical Axis</strong>: The actual true classes.</li>
+                                <li><strong>Horizontal Axis</strong>: What the model predicted.</li>
+                                <li><strong>Diagonal</strong>: These are the correct hits.</li>
+                            </ul>
+                            <p class="text-muted x-small mb-0">If one box off the diagonal is very dark/bright, that's a
+                                systematic error the model is making.</p>
+                            {% else %}
+                            <p class="text-muted small">
+                                This plot places every prediction against its real value.
+                            </p>
+                            <ul class="text-muted x-small">
+                                <li><strong>The Line</strong>: Represents the 45-degree "Identity Line" where prediction
+                                    = truth.</li>
+                                <li><strong>Tightness</strong>: The closer the dots are to the line, the more accurate
+                                    the model.</li>
+                            </ul>
+                            <p class="text-muted x-small mb-0">Look for outliers here to find edge cases where your data
+                                might be noisy.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Insights - Heatmap -->
+            <div class="diag-section">
+                <div class="row align-items-center">
+                    <div class="col-md-5 order-2 order-md-1">
+                        <div class="info-box shadow-sm">
+                            <h5 class="info-title">
+                                <i class="fas fa-th"></i> Feature Relationships
+                            </h5>
+                            <p class="text-muted small">
+                                This heatmap measures how features move together (Correlation).
+                            </p>
+                            <ul class="text-muted x-small">
+                                <li><strong>+1.0 (Red)</strong>: Perfect positive link.</li>
+                                <li><strong>-1.0 (Blue/Dark)</strong>: Perfect inverse link.</li>
+                                <li><strong>0 (White)</strong>: No linear relationship.</li>
+                            </ul>
+                            <div class="alert alert-warning x-small border py-1 mb-0">
+                                <i class="fas fa-shield-alt"></i> Redundant features were automatically dropped.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7 text-center order-1 order-md-2">
+                        <img src="{{ url_for('static', filename='images/heatmap.png') }}"
+                            class="uniform-diag-img shadow-sm border" alt="Correlation Heatmap">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Insights - Histograms -->
+            <div class="diag-section">
+                <div class="row align-items-center">
+                    <div class="col-md-7 text-center">
+                        <img src="{{ url_for('static', filename='images/histograms.png') }}"
+                            class="uniform-diag-img shadow-sm border" alt="Feature Histograms">
+                    </div>
+                    <div class="col-md-5">
+                        <div class="info-box shadow-sm">
+                            <h5 class="info-title">
+                                <i class="fas fa-chart-bar"></i> Variable Distribution
+                            </h5>
+                            <p class="text-muted small">
+                                These graphs show the spread and frequency of your core numerical values.
+                            </p>
+                            <p class="text-muted small mb-0">
+                                Look for <strong>Skewness</strong> (tail on one side) or <strong>Outliers</strong>
+                                (isolated bars).
+                                The pipeline uses this to decide how to scale features for the best possible model
+                                stability.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mb-5 pb-5">
+            <a href="/download_model" class="btn btn-dark btn-lg px-5 rounded-pill shadow">
+                <i class="fas fa-download me-2"></i> Export Trained Model (.pkl)
+            </a>
+            <p class="text-muted mt-3 small">You can use this model in production environments using
+                <code>joblib.load()</code>.
+            </p>
         </div>
     </div>
 

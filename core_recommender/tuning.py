@@ -1,9 +1,13 @@
-
 import optuna
 import numpy as np
 from typing import Dict, Any, Callable, List, Optional
 from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.base import BaseEstimator
+
+# Import centralized logger
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
 
 # =========================================================================
 # 🎛️ tuning.py: Modular Hyperparameter Optimization Functions
@@ -20,7 +24,11 @@ def get_grid_search_tuner(
     """
     Returns a configured GridSearchCV object (Standard Exhaustive Search).
     
-    Matches the factory pattern of preprocessing.py.
+    Rationale:
+    ----------
+    - **Exhaustive**: Tries *every combination* of parameters in the grid.
+    - **Reliable**: Guaranteed to find the best combination within the specified grid.
+    - **Costly**: Can be very slow if the parameter space is large.
 
     Args:
         estimator: The scikit-learn model instance to tune.
@@ -139,8 +147,11 @@ def run_optuna_optimization(
     """
     Executes an Optuna hyperparameter optimization study (Bayesian Optimization) and returns the best fitted model.
     
-    Matches the functional execution pattern of dataHandling.py.
-
+    Rationale:
+    ----------
+    - **Efficient**: Uses Bayesian Optimization (TPE) to pinpoint promising areas of the hyperparameter space, rather than searching blindly.
+    - **Fast**: Converges to optimal parameters much faster than Grid Search or Random Search for high-dimensional spaces.
+    
     Args:
         estimator_class: The class of the model to instantiate (e.g., KNeighborsClassifier). Not an instance.
         param_space_func: A function that takes an optuna.Trial and returns a dictionary of hyperparameters.
@@ -183,11 +194,12 @@ def run_optuna_optimization(
     sampler = optuna.samplers.TPESampler(seed=random_state)
     study = optuna.create_study(direction='maximize', sampler=sampler)
     
-    print(f"   [Optuna] Running {n_trials} trials...")
-    study.optimize(objective, n_trials=n_trials, timeout=timeout)
+    logger.info(f"   [Optuna] Running {n_trials} trials...")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
     
-    print(f"   [Optuna] Best Score: {study.best_value:.4f}")
-    print(f"   [Optuna] Best Params: {study.best_params}")
+    logger.info(f"   [Optuna] Completed {n_trials} trials")
+    logger.info(f"   [Optuna] Best Score: {study.best_value:.4f}")
+    logger.debug(f"   [Optuna] Best Params: {study.best_params}")
     
     # Re-train best model
     best_params = study.best_params

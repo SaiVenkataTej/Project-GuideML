@@ -23,6 +23,10 @@ from core_recommender.evaluation import (
     calculate_r2_score
 )
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+logger = get_logger(__name__)
+
 # --- DEFAULT CONFIGURATION ---
 CONFIG = {
     'kernel': ['linear', 'rbf', 'poly'],
@@ -42,20 +46,48 @@ CONFIG = {
 
 class SVMModel(BaseModel):
     """
-    A concrete implementation of Support Vector Machines (SVM) for both Classification (SVC) and Regression (SVR).
+    A concrete implementation of Support Vector Machines (SVM) for both Classification (SVC) 
+    and Regression (SVR) within the core_recommender framework.
     
-    This model finds the optimal hyperplane that maximizes the margin between classes (SVC) 
-    or fits the error within a threshold (SVR). It supports various kernels (Linear, RBF, Poly)
-    to handle non-linear relationships and integrates Dimensionality Reduction (PCA) automatically.
+    Overview:
+    ---------
+    Support Vector Machines works by finding the optimal hyperplane that separates data points 
+    of different classes (SVC) or fits the data within a specified margin of error (SVR).
+    This implementation encapsulates the complexity of:
+    1. Pipeline Construction: Integrating Scaling, PCA, and OneHot Encoding automatically.
+    2. Hyperparameter Tuning: Automating the search for optimal 'C', 'kernel', and 'gamma' using Optuna.
+    3. Diagnostics: Providing support vector counts, probabilities, and decision function analysis.
+
+    Key Features:
+    -------------
+    - **Dual Mode**: Automatically switches between SVC and SVR based on `is_classification` flag.
+    - **Dimensionality Reduction**: Integrated PCA step to handle high-dimensional data, improving 
+      SVM performance and training time (controlled via `pca_components`).
+    - **Robust Scaling**: Enforces Standardization or MinMax scaling, which is a strict requirement 
+      for SVM convergence.
+    - **Balanced Weights**: Handles class imbalance automatically in classification mode.
+
+    Configuration (`CONFIG`):
+    -------------------------
+    - `kernel`: List[str] - Kernels to try (e.g., 'linear', 'rbf'). Linear is faster; RBF captures non-linearity.
+    - `C`: List[float] - Regularization parameter range. Low C = simple decision surface (high bias), 
+      High C = complex surface (high variance).
+    - `gamma`: List[Union[str, float]] - Kernel coefficient. 'scale' is recommended.
+    - `pca_components`: float|int|None - Variance ratio to keep (if < 1.0) or count (if int). None to disable.
     """
     def __init__(self, is_classification: bool = True, config: Dict[str, Any] = CONFIG):
         """
-        Initializes the SVM model with task-specific configurations.
+        Initializes the SVM model with task-specific configurations and sets up the internal 
+        scikit-learn estimator.
 
         Args:
-            is_classification: True for classification tasks, False for regression.
-            config: Dictionary containing hyperparameters (e.g., 'C', 'kernel', 'gamma', 'pca_components').
-                    Defaults to the global CONFIG dictionary.
+            is_classification (bool): 
+                - If `True`, initializes a `SVC` (Support Vector Classifier).
+                - If `False`, initializes a `SVR` (Support Vector Regressor).
+            config (Dict[str, Any]): 
+                Configuration dictionary containing hyperparameters and pipeline settings.
+                Keys should match those in the global `CONFIG` dictionary. 
+                Defaults are used for missing keys.
         """
         
         task_name = "Classification" if is_classification else "Regression"
@@ -80,22 +112,33 @@ class SVMModel(BaseModel):
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """
-        Constructs and applies the feature pipeline optimized for SVM.
+        Constructs and applies a robust feature preprocessing pipeline optimized for Support Vector Machines.
         
-        Pipeline Steps:
-        1. Numerical: Median imputation. Standard Scaling (Critical for SVM). PCA (Dimensionality Reduction).
-        2. Categorical: Most frequent imputation. One-Hot encoding.
-        
+        Rationale:
+        ----------
+        SVMs are distance-based algorithms heavily influenced by feature scales. 
+        - **Scaling**: A StandardScaler (or MinMax) is mandatory to ensure all features contribute 
+          equally to the margin calculation.
+        - **Imputation**: Missing values are imputed (Median for numerical, Mode for categorical) 
+          as SVMs cannot handle NaNs.
+        - **Encoding**: Categorical variables are One-Hot Encoded.
+        - **Dimensions**: Optional PCA reduction is applied to numerical data to mitigate the 
+          "Curse of Dimensionality" and speed up convergence.
+
         Args:
-            X: Input features DataFrame.
-            y: Target Series.
-            
+            X (pd.DataFrame): Raw input features.
+            y (pd.Series): Raw target variable.
+
         Returns:
-            Tuple containing:
-            - Transformed feature array (np.ndarray)
-            - Transformed target array (np.ndarray)
-            - The fitted ColumnTransformer object
+            Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
+                - **X_transformed**: Numpy array of processed features ready for training.
+                - **y_transformed**: Numpy array of processed target (Label Encoded if classification).
+                - **preprocessor**: The fitted `ColumnTransformer` object, essential for ensuring 
+                  test data undergoes the exact same transformation.
         """
+        logger.debug(f"[{self.name}] Entering preprocess()...")
+        logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
+        
         # 1. Pipeline Construction
         # ------------------------
         
@@ -105,12 +148,15 @@ class SVMModel(BaseModel):
         
         if self.config.get('scaler') == 'minmax':
             num_steps.append(('scaler', get_minmax_scaler()))
+            logger.debug(f"[{self.name}] Using MinMaxScaler for feature scaling")
         else:
             num_steps.append(('scaler', get_standard_scaler())) # Standard Scaler (Req)
+            logger.debug(f"[{self.name}] Using StandardScaler for feature scaling")
 
         # PCA (Dimensionality Reduction - Req)
         if self.config.get('pca_components') is not None:
             num_steps.append(('pca', get_pca_reducer(n_components=self.config.get('pca_components', 0.95))))
+            logger.debug(f"[{self.name}] Applying PCA (n_components={self.config.get('pca_components', 0.95)})")
 
         numerical_pipeline = Pipeline(steps=num_steps)
 
@@ -142,67 +188,93 @@ class SVMModel(BaseModel):
             remainder='drop',
             n_jobs=self.config.get('n_jobs', -1)
         )
+        logger.debug(f"[{self.name}] ColumnTransformer configured with numerical and categorical pipelines.")
 
-        # 3. Fit-Transform
-        # ----------------
+        self.preprocessor = preprocessor
+
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
+        logger.debug(f"[{self.name}] X transformed shape: {X_transformed.shape}")
 
-        # 4. Target Processing
-        # --------------------
         if self.is_classification:
-            le = LabelEncoder()
-            y_transformed = le.fit_transform(y)
-            self.label_encoder = le
+            if not np.issubdtype(y.dtype, np.number):
+                le = LabelEncoder()
+                y_transformed = le.fit_transform(y)
+                self.label_encoder = le
+                logger.debug(f"[{self.name}] Target variable LabelEncoded for classification.")
+            else:
+                y_transformed = y.values
+                self.label_encoder = None
+                logger.debug(f"[{self.name}] Target variable is already numerical for classification.")
         else:
-            y_transformed = y.values # No encoding for regression target
+            y_transformed = y.values
             self.label_encoder = None
+            logger.debug(f"[{self.name}] Target variable for regression.")
 
+        logger.debug(f"[{self.name}] Preprocessing complete. Output shapes: X={X_transformed.shape}, y={y_transformed.shape}")
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
         """
-        Trains the SVM model using Optuna (Tier 3) tuning strategy.
+        Trains the SVM model using a Unified Pipeline to prevent data leakage.
+        """
+        logger.info(f"[{self.name}] Starting training...")
+        logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        Args:
-            X_train: Training features array.
-            y_train: Training target array.
-        """
-        from core_recommender.tuning import run_optuna_optimization
+        from sklearn.model_selection import StratifiedKFold, KFold, cross_val_score
+        from sklearn.base import clone
+        import optuna
 
         # 1. Base Strategy
         if self.is_classification:
             base_cls = SVC
-            # using 'accuracy' or 'f1_weighted' depending on preference. 
-            # Config defaulted RandomizedSearch to f1_weighted.
             scoring = 'f1_weighted' 
             cv = StratifiedKFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+            logger.debug(f"[{self.name}] Classification task: SVC, scoring='{scoring}', using StratifiedKFold.")
         else:
             base_cls = SVR
             scoring = 'neg_root_mean_squared_error'
             cv = KFold(n_splits=self.config.get('cv_folds', 5), shuffle=True, random_state=self.config.get('random_state', 42))
+            logger.debug(f"[{self.name}] Regression task: SVR, scoring='{scoring}', using KFold.")
 
-        # 2. Run Optuna
-        print(f"[{self.name}] Starting Training with OPTUNA strategy...")
+        # 2. Pipeline-based Tuning
+        preprocessor_template = clone(self.preprocessor)
         
-        self.best_estimator = run_optuna_optimization(
-            estimator_class=base_cls,
-            param_space_func=self._get_optuna_space,
-            X=X_train,
-            y=y_train,
-            cv=cv,
-            scoring=scoring,
-            n_trials=self.config.get('n_iter', 20), # Use n_iter config as n_trials for Optuna
-            n_jobs=self.config.get('n_jobs', -1),
-            random_state=self.config.get('random_state', 42)
-        )
-        
-        # Capture study
-        if hasattr(self.best_estimator, 'study_'):
-            self.study = self.best_estimator.study_
+        def pipeline_objective(trial):
+            params = self._get_optuna_space(trial)
+            model_inst = base_cls(**params)
+            
+            pipe = Pipeline(steps=[
+                ('pre', preprocessor_template),
+                ('model', model_inst)
+            ])
+            
+            scores = cross_val_score(pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=self.config.get('n_jobs', -1))
+            return scores.mean()
 
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        logger.debug(f"[{self.name}] Starting Optuna optimization (n_trials={self.config.get('n_iter', 20)})...")
+        study = optuna.create_study(direction='maximize')
+        study.optimize(pipeline_objective, n_trials=self.config.get('n_iter', 20))
+        
+        # 3. Build Best Model
+        best_params = study.best_params
+        best_model_inst = base_cls(**best_params)
+        
+        self.best_estimator = Pipeline(steps=[
+            ('pre', preprocessor_template),
+            ('model', best_model_inst)
+        ])
+        self.best_estimator.fit(X_train, y_train)
+        
+        self.study = study
         self.model = self.best_estimator
-        print(f"[{self.name}] Best parameters: {self.study.best_params if hasattr(self, 'study') else 'N/A'}")
+        
+        best_score = study.best_value
+        best_params = study.best_params
+        logger.info(f"✅ [{self.name}] Training complete")
+        logger.info(f"[{self.name}] Best CV Score: {best_score:.4f}")
+        logger.debug(f"[{self.name}] Best params: {best_params}")
 
     def _get_optuna_space(self, trial):
         """Defines the search space for SVM."""
@@ -239,45 +311,42 @@ class SVMModel(BaseModel):
             
         return params
 
-    def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates task-specific performance metrics.
-
-        Metrics Include:
-        - Accuracy, F1 Score (Classification)
-        - RMSE, R2 Score (Regression)
+        Calculates performance metrics using the full Pipeline.
         """
         y_pred = self.best_estimator.predict(X_test)
         
         metrics = {}
         if self.is_classification:
-            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) # Req
-            metrics['F1 Score'] = calculate_f1_score(y_test, y_pred, average='weighted') # Req
+            metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) 
+            metrics['F1 Score'] = calculate_f1_score(y_test, y_pred, average='weighted')
         else:
             metrics['RMSE'] = calculate_rmse(y_test, y_pred)
             metrics['R2 Score'] = calculate_r2_score(y_test, y_pred)
         
         return metrics
 
-    def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+    def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Retrieves diagnostic data for visualization.
+        Retrieves diagnostic data for visualization using the Pipeline.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
         
         y_pred = self.best_estimator.predict(X_test)
+        final_model = self.best_estimator.named_steps['model']
         
         data = {
             'y_pred': y_pred,
             'y_test': y_test,
             'model_name': self.name,
-            'support_vectors': self.best_estimator.support_vectors_,
-            'n_support': self.best_estimator.n_support_ if hasattr(self.best_estimator, 'n_support_') else None,
+            'support_vectors': final_model.support_vectors_,
+            'n_support': final_model.n_support_ if hasattr(final_model, 'n_support_') else None,
             'is_classification': self.is_classification
         }
 
-        if self.is_classification and hasattr(self.best_estimator, 'predict_proba'):
+        if self.is_classification and hasattr(final_model, 'predict_proba'):
             data['y_proba'] = self.best_estimator.predict_proba(X_test)
 
         return data
@@ -286,10 +355,30 @@ class SVMModel(BaseModel):
         """
         Retrieves feature importance (Coefficients) for Linear kernel SVMs only.
         """
-        # Check kernel on the fitted estimator instance directly
-        if getattr(self.best_estimator, 'kernel', '') == 'linear':
-            if hasattr(self.best_estimator, 'coef_'):
-                 # Returning raw coefs not super useful without feature names & multi-class handling
-                 # But keeping generic as requested
-                 return {'coef_': self.best_estimator.coef_}
+        final_model = self.best_estimator.named_steps['model']
+        if getattr(final_model, 'kernel', '') == 'linear':
+            if hasattr(final_model, 'coef_'):
+                 return {'coef_': final_model.coef_}
         return {}
+
+    def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """
+        Returns descriptions of the most important tuned parameters.
+        """
+        final_model = self.best_estimator.named_steps['model']
+        params = final_model.get_params()
+        descriptions = {
+            'C': {
+                'value': f"{params.get('C'):.4f}",
+                'desc': 'The regularization parameter. It controls the trade-off between maximizing the margin and minimizing classification errors.'
+            },
+            'kernel': {
+                'value': str(params.get('kernel')),
+                'desc': 'The type of kernel used (e.g., RBF or Linear). Kernels allow SVM to find non-linear boundaries in higher-dimensional space.'
+            },
+            'gamma': {
+                'value': str(params.get('gamma')),
+                'desc': 'Defines how far the influence of a single training example reaches. Low values mean "far" and high values mean "close".'
+            }
+        }
+        return descriptions

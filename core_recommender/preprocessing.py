@@ -46,13 +46,24 @@ def get_imputer(strategy: Literal['mean', 'median', 'most_frequent', 'constant']
     """
     Returns a configured SimpleImputer object for handling missing values.
 
+    Rationale:
+    ----------
+    Missing data is common in real-world datasets.
+    - **Median** is robust to outliers and preferred for continuous data.
+    - **Most Frequent** is the standard for categorical data.
+    - **Constant** is useful when "missing" itself is a signal (e.g., missing credit score = no credit history).
+
     Args:
-        strategy: The imputation strategy. Options: 'mean', 'median', 'most_frequent', 'constant'.
+        strategy: The imputation strategy. 
+                  - 'median': Use median of non-missing values (Robust).
+                  - 'mean': Use mean of non-missing values (Sensitive to outliers).
+                  - 'most_frequent': Use mode (For categorical/discrete).
+                  - 'constant': Replace with `fill_value`.
                   Defaults to 'median'.
-        fill_value: Value to use when strategy='constant'. Defaults to None.
+        fill_value: constant value to use when strategy='constant'. Defaults to None.
         
     Returns:
-        SimpleImputer: A scikit-learn SimpleImputer instance.
+        SimpleImputer: A scikit-learn SimpleImputer instance ready for fitting.
     """
     return SimpleImputer(strategy=strategy, fill_value=fill_value)
 
@@ -67,12 +78,18 @@ def get_one_hot_encoder(handle_unknown: Literal['error', 'ignore'] = 'ignore',
     """
     Returns a configured OneHotEncoder object for nominal categorical variables.
 
+    Rationale:
+    ----------
+    Machine Learning algorithms require numerical input.
+    - **One-Hot Encoding** creates binary columns for each category, avoiding the implied order of ordinal encoding (e.g., Red < Blue < Green is false).
+    - **Handle Unknown='ignore'** is critical for production systems to prevent crashes when new, unseen categories appear in test data.
+
     Args:
-        handle_unknown: Strategy to handle new categories. 
-                        - 'ignore': Recommended for robustness.
-                        - 'error': Raises error on new categories.
+        handle_unknown: Strategy to handle new categories found in test data but not training data.
+                        - 'ignore': Recommended for production robustness (all resulting OHE columns will be 0).
+                        - 'error': Raises error on new categories (strict validation).
                         Defaults to 'ignore'.
-        sparse_output: Whether to return a sparse matrix. Defaults to False (dense output).
+        sparse_output: Whether to return a sparse matrix. Defaults to False (dense output) for easier debugging with Pandas.
 
     Returns:
         OneHotEncoder: A scikit-learn OneHotEncoder instance.
@@ -106,7 +123,12 @@ def get_ordinal_encoder(handle_unknown: Literal['error', 'use_encoded_value'] = 
 def get_standard_scaler() -> StandardScaler:
     """
     Returns a configured StandardScaler for Z-score normalization.
-    Centers data by removing the mean and scaling to unit variance.
+    
+    Rationale:
+    ----------
+    - Centers data to Mean = 0 and Variance = 1.
+    - Crucial for distance-based algorithms (SVM, KNN) and linear models (Ridge/Lasso) to ensure all features contribute equally.
+    - Assumes data follows a roughly Gaussian distribution.
     
     Returns:
         StandardScaler: A scikit-learn StandardScaler instance.
@@ -141,7 +163,12 @@ def get_robust_scaler() -> RobustScaler:
 def get_log_transformer() -> FunctionTransformer:
     """
     Returns a FunctionTransformer applying np.log1p (log(1+x)).
-    Suitable for right-skewed, non-negative data to normalize distribution.
+    
+    Rationale:
+    ----------
+    - **Skewness Reduction**: Many real-world variables (e.g., Income, Population) have a "long tail".
+    - Log transform compresses the tail, making the distribution more Normal (Gaussian).
+    - **np.log1p** is used instead of np.log to handle zero values safely (log(0) is undefined).
 
     Returns:
         FunctionTransformer: A scikit-learn FunctionTransformer instance configured for log transformation.
@@ -266,11 +293,17 @@ def get_pca_reducer(n_components: Union[int, float, None] = 0.95) -> PCA:
     """
     Returns a configured Principal Component Analysis (PCA) object for dimensionality reduction.
 
+    Rationale:
+    ----------
+    - **Noise Reduction**: Removes dimensions with low variance which often represent noise.
+    - **Collinearity Removal**: Produces orthogonal (uncorrelated) components.
+    - **Efficiency**: Reduces training time by shrinking the feature space.
+
     Args:
-        n_components: Number of components to keep. 
-                      - If int >= 1: Number of components.
-                      - If float 0.0 < n_components < 1.0: Fraction of variance to preserve.
-                      Defaults to 0.95 (95% variance).
+        n_components: Desired dimensionality.
+                      - If int >= 1: Exact number of components.
+                      - If float 0.0 < n <= 1.0: Minimum fraction of variance to explain (Adaptive).
+                      Defaults to 0.95 (Keep enough components to explain 95% of original variance).
 
     Returns:
         PCA: A scikit-learn PCA instance.

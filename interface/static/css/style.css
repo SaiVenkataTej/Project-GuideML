@@ -24,6 +24,7 @@ body {
 .text-gradient {
     background: var(--primary-gradient);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -82,7 +83,62 @@ body {
     font-size: 0.8rem;
 }
 
-/* Loading Overlay */
+/* Dashboard Redesign */
+.uniform-diag-img {
+    height: 350px;
+    width: 100%;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.diag-section {
+    padding: 40px 0;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.diag-section:last-child {
+    border-bottom: none;
+}
+
+.info-box {
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border-left: 4px solid #667eea;
+    height: 100%;
+}
+
+.info-title {
+    font-weight: 700;
+    color: #4a5568;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.info-title i {
+    margin-right: 10px;
+    color: #667eea;
+}
+
+.x-small {
+    font-size: 0.75rem;
+}
+
+.bg-soft-primary {
+    background-color: rgba(102, 126, 234, 0.1);
+}
+
+.bg-white-50 {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.italic {
+    font-style: italic;
+}
+
 #loadingOverlay {
     position: fixed;
     top: 0;

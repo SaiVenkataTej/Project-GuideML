@@ -25,12 +25,18 @@ def calculate_rmse(y_true: ArrayLike, y_pred: ArrayLike) -> float:
     """
     Calculates Root Mean Squared Error (RMSE).
 
+    Rationale:
+    ----------
+    - **Standard Metric**: The most common metric for regression.
+    - **Penalizes Large Errors**: Squaring the error means outliers have a disproportionately large effect.
+    - Interpretation: Represented in the same units as the target variable.
+
     Args:
         y_true: Ground truth (correct) target values.
         y_pred: Estimated target values.
 
     Returns:
-        float: The root mean squared error. Lower is better.
+        float: The root mean squared error. Lower is better. 0 is perfect.
     """
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
@@ -104,14 +110,21 @@ def calculate_f1_score(y_true: ArrayLike, y_pred: ArrayLike, average: Literal['m
     """
     Calculates F1-Score (harmonic mean of Precision and Recall).
 
+    Rationale:
+    ----------
+    - **Balanced Metric**: Useful when classes are imbalanced (unlike Accuracy, which can be misleading).
+    - **Weighted Average**: Defaults to 'weighted' to account for class imbalance by weighting the score by the number of true instances for each label.
+
     Args:
         y_true: Ground truth (correct) labels.
         y_pred: Predicted labels.
-        average: This parameter is required for multiclass/multilabel targets.
+        average: Strategy for multiclass aggregation.
+                 - 'weighted': Metric calculated for each label, and finds their average weighted by support.
+                 - 'macro': Calculate metrics for each label, and find their unweighted mean.
                  Defaults to 'weighted'.
 
     Returns:
-        float: The F1 score.
+        float: The F1 score. 1 is best, 0 is worst.
     """
     return float(f1_score(y_true, y_pred, average=average, zero_division=0))
 
@@ -124,17 +137,22 @@ def calculate_roc_auc_score(
     """
     Calculates Area Under the Receiver Operating Characteristic Curve (ROC-AUC).
     
-    Requires probability scores (y_proba). Enhanced for robust multi-class support.
+    Rationale:
+    ----------
+    - **Threshold Invariant**: Measures the quality of the model's ranking ability, regardless of the decision threshold.
+    - **Robust**: Good summary of performance across all classification thresholds.
 
     Args:
         y_true: Ground truth (correct) labels.
         y_proba: Predicted probabilities.
-        multi_class_strategy: Strategy for handling multi-class. 'ovo' (One-vs-One) or 'ovr' (One-vs-Rest).
+        multi_class_strategy: Strategy for handling multi-class. 
+                              - 'ovr' (One-vs-Rest): Computes AUC of each class against the rest.
+                              - 'ovo' (One-vs-One): Computes average AUC of all possible pairwise combinations.
                               Defaults to 'ovr'.
         average: Averaging strategy. Defaults to 'weighted'.
 
     Returns:
-        float: The ROC-AUC score.
+        float: The ROC-AUC score. 1 is perfect, 0.5 is random variance.
     """
     # Ensure inputs are NumPy arrays for safety
     y_proba_arr = np.asarray(y_proba) # Renamed to y_proba_arr

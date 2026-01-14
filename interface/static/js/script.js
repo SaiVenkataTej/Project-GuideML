@@ -98,14 +98,24 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('file', fileInput.files[0]);
         formData.append('target_column', targetSelect.value);
         
+        // Collect selected models
+        const selectedModels = document.querySelectorAll('input[name="models"]:checked');
+        selectedModels.forEach(model => {
+            formData.append('models[]', model.value);
+        });
+        
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+
         fetch('/process', {
             method: 'POST',
             body: formData
         })
         .then(response => response.json())
         .then(data => {
-            if (data.status === 'success') {
-                window.location.href = data.redirect;
+            if (data.status === 'queued') {
+                const jobId = data.job_id;
+                pollStatus(jobId);
             } else {
                 alert('Error: ' + data.error);
                 loadingOverlay.classList.add('d-none');
@@ -116,5 +126,30 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('An unexpected error occurred. Check console.');
             loadingOverlay.classList.add('d-none');
         });
+
+        function pollStatus(jobId) {
+            const interval = setInterval(() => {
+                fetch(`/status/${jobId}`)
+                .then(res => res.json())
+                .then(status => {
+                    if (status.status === 'completed') {
+                        clearInterval(interval);
+                        window.location.href = status.redirect;
+                    } else if (status.status === 'failed') {
+                        clearInterval(interval);
+                        alert('Training Failed: ' + status.error);
+                        loadingOverlay.classList.add('d-none');
+                    } else {
+                        // Update Progress UI
+                        progressBar.style.width = status.progress + '%';
+                        statusMessage.textContent = status.message;
+                    }
+                })
+                .catch(err => {
+                    clearInterval(interval);
+                    console.error('Polling error:', err);
+                });
+            }, 1000); // Poll every second
+        }
     });
 });

@@ -112,6 +112,44 @@ Desktop.ini
 .idea/
 
 # Project specific logs and outputs
+logs/
 error_log.txt
 run_output*.txt
 test_output*.txt
+
+# Data
+data/
+*.csv
+*.xlsx
+*.parquet
+*.feather
+
+# ML Model Artifacts
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.pt
+*.pth
+*.onnx
+*.model
+
+# Visualizations
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+plots/
+images/
+
+# Application Logs
+guideml.log
+error.log
+
+# Generated Reports
+Results Dashboard*
+
+# Temporary/Debug Scripts
+run_debug.py
+verify_imports.py

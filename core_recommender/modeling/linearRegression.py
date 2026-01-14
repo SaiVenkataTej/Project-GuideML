@@ -29,6 +29,10 @@ from core_recommender.evaluation import (
 )
 from core_recommender.visualization import plot_coefficient_bar_chart
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+logger = get_logger(__name__)
+
 # --- DEFAULT CONFIGURATION ---
 CONFIG = {
     'scaler': 'standard',      # 'standard' or 'robust'
@@ -47,9 +51,14 @@ class LinearRegressionModel(BaseModel):
     """
     A concrete implementation of Linear Regression optimized for Regression tasks.
     
+    Rationale:
+    ----------
+    - **ElasticNet Base**: We use ElasticNet because it generalizes Ridge (L2) and Lasso (L1) regularization.
+    - **Multicollinearity Handling**: Regularization (L1/L2) is crucial when features are correlated, which is common in automated pipelines.
+    - **Interpretability**: Coefficients provide a direct measure of feature impact (Magnitude and Direction).
+
     This model utilizes ElasticNet, which generalizes Ridge (L2 penalty) and Lasso (L1 penalty)
-    regularization. This allows for both variable selection and coefficient shrinkage, making 
-    it robust against multicollinearity and overfitting.
+    regularization. This allows for both variable selection and coefficient shrinkage.
     """
     def __init__(self, config: Dict[str, Any] = CONFIG):
         """
@@ -83,10 +92,16 @@ class LinearRegressionModel(BaseModel):
         """
         Constructs and applies the feature pipeline optimized for Linear Regression.
         
+        Rationale:
+        ----------
+        - **Normality Assumption**: Linear models assume residuals are normally distributed. Transformations (Log/Box-Cox) help achieve this.
+        - **Scaling**: Essential for regularization (L1/L2) so that penalties are applied uniformly across features.
+        - **Dummy Trap**: One-Hot Encoding with `drop='first'` prevents perfect collinearity, which breaks the normal equation (though less critical with regularization).
+        
         Pipeline Steps:
         1. Numerical: Median imputation. Transformations (Log, Box-Cox, Yeo-Johnson). 
            Robust or Standard Scaling. Feature Selection.
-        2. Categorical: Most frequent imputation. One-Hot encoding (drop='first' to avoid dummy trap).
+        2. Categorical: Most frequent imputation. One-Hot encoding (drop='first').
         
         Args:
             X: Input features DataFrame.
@@ -101,15 +116,22 @@ class LinearRegressionModel(BaseModel):
         Raises:
             ValueError: If target variable 'y' contains NaNs.
         """
+        logger.debug(f"[{self.name}] Entering preprocess()...")
+        logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
+        
         # Edge Case: Check for NaNs in target y before proceeding
         if y.isna().any():
+            logger.error(f"[{self.name}] Target variable contains {y.isna().sum()} NaN values")
             raise ValueError("Target variable 'y' contains missing values (NaNs). Please handle missing targets before training.")
 
         # 1. Scaling Strategy
-        if self.config.get('scaler') == 'robust':
+        scaler_type = self.config.get('scaler', 'standard')
+        if scaler_type == 'robust':
             scaler = get_robust_scaler()
+            logger.debug(f"[{self.name}] Using RobustScaler (resistant to outliers)")
         else:
             scaler = get_standard_scaler()
+            logger.debug(f"[{self.name}] Using StandardScaler (zero mean, unit variance)")
 
         # 2. Numerical Pipeline
         # Steps: Impute -> Transform (Log/Power) -> Scale -> Select
@@ -121,11 +143,14 @@ class LinearRegressionModel(BaseModel):
         trans_type = self.config.get('transformation')
         if trans_type == 'log':
             num_steps.append(('log_transform', get_log_transformer()))
+            logger.debug(f"[{self.name}] Applying log transformation for normality")
         elif trans_type == 'box-cox':
             # Box-Cox requires strictly positive data
             num_steps.append(('box_cox', get_box_cox_transformer()))
+            logger.debug(f"[{self.name}] Applying Box-Cox transformation")
         elif trans_type == 'yeo-johnson':
             num_steps.append(('yeo_johnson', get_yeo_johnson_transformer()))
+            logger.debug(f"[{self.name}] Applying Yeo-Johnson transformation")
         
         num_steps.append(('scaler', scaler))
 
@@ -133,10 +158,13 @@ class LinearRegressionModel(BaseModel):
         sel_type = self.config.get('feature_selection')
         if sel_type == 'variance':
             num_steps.append(('variance_thresh', get_variance_threshold(threshold=0.0)))
+            logger.debug(f"[{self.name}] Applying variance threshold feature selection")
         elif sel_type == 'k_best':
             num_steps.append(('k_best', get_select_k_best(k=10, score_func='f_regression')))
+            logger.debug(f"[{self.name}] Applying SelectKBest (k=10) feature selection")
 
         numerical_pipeline = Pipeline(steps=num_steps)
+        logger.debug(f"[{self.name}] Numerical pipeline: {len(num_steps)} steps")
 
         # 3. Categorical Pipeline
         # Steps: Impute -> OneHot (drop='first')
@@ -170,63 +198,72 @@ class LinearRegressionModel(BaseModel):
             n_jobs=self.config.get('n_jobs', -1)
         )
 
-        # 5. Fit and Transform
+        self.preprocessor = preprocessor
+        
+        # We still return the fitted version for back-compat or initial extraction, 
+        # but the fit() method will use a fresh clone.
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
-        y_transformed = np.asarray(y.values)
+        y_transformed = y.values if hasattr(y, 'values') else np.asarray(y)
 
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
         """
-        Trains the Linear Regression model using GridSearchCV (Tier 1) via factory.
+        Trains the Linear Regression model using a Unified Pipeline to prevent data leakage.
+        """
+        logger.info(f"[{self.name}] Starting training...")
+        logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        Args:
-            X_train: Training features array.
-            y_train: Training target array.
-        """
-        from core_recommender.tuning import get_grid_search_tuner
+        from sklearn.model_selection import GridSearchCV
+        from sklearn.base import clone
 
-        # K-Fold Cross Validation (Shuffle=True)
+        # 1. Pipeline Construction
+        # We wrap the unfitted preprocessor and model in one object
+        preprocessor_template = clone(self.preprocessor)
+        pipe = Pipeline(steps=[
+            ('pre', preprocessor_template),
+            ('model', self.model_instance)
+        ])
+
+        # 2. Adjust Param Grid
+        # GridSearchCV needs parameter names prefixed with the step name (e.g., 'model__alpha')
+        pipeline_param_grid = {f'model__{k}': v for k, v in self.param_grid.items()}
+
+        # 3. K-Fold Cross Validation
         cv_strategy = KFold(
             n_splits=self.config.get('cv_folds', 5), 
             shuffle=True, 
             random_state=self.config.get('random_state', 42)
         )
 
-        # GridSearch
-        self.model = get_grid_search_tuner(
-            estimator=self.model_instance,
-            param_grid=self.param_grid,
+        # 4. GridSearch on THE PIPELINE
+        # This ensures preprocessing is re-fit in every CV fold (Zero Leakage)
+        grid_search = GridSearchCV(
+            estimator=pipe,
+            param_grid=pipeline_param_grid,
             scoring='neg_mean_squared_error',
             cv=cv_strategy,
             n_jobs=self.config.get('n_jobs', -1),
-            verbose=1
+            verbose=0
         )
 
-        print(f"[{self.name}] Starting GridSearchCV (Tier 1)...")
-        self.model.fit(X_train, y_train)
+        grid_search.fit(X_train, y_train)
         
-        self.best_estimator = self.model.best_estimator_
-        print(f"[{self.name}] Best parameters: {self.model.best_params_}")
+        self.best_estimator = grid_search.best_estimator_
+        self.model = grid_search # Store the tuner for parameter access
+        
+        best_score = grid_search.best_score_
+        best_params = grid_search.best_params_
+        logger.info(f"✅ [{self.name}] Training complete")
+        logger.info(f"[{self.name}] Best CV Score: {-best_score:.4f} (MSE)")
+        logger.debug(f"[{self.name}] Best params: {best_params}")
 
-    def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
+    def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
         """
-        Calculates standard regression performance metrics.
-
-        Metrics Include:
-        - Root Mean Squared Error (RMSE)
-        - Mean Absolute Error (MAE)
-        - R-squared (R2) score
-        - Adjusted R2 score
-
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, float]: Dictionary of calculated metrics.
+        Calculates standard regression performance metrics using the full Pipeline.
         """
+        # The pipeline handles raw X_test (pre -> model)
         y_pred = self.best_estimator.predict(X_test)
         
         metrics = {}
@@ -234,61 +271,55 @@ class LinearRegressionModel(BaseModel):
         metrics['MAE'] = calculate_mae(y_test, y_pred)
         metrics['R2 Score'] = calculate_r2_score(y_test, y_pred)
         
-        # For Adjusted R2, we need n_samples and n_features
+        # Access the processed data shape for adjusted R2
+        # We can transform temporarily to get the feature count
         n_samples = X_test.shape[0]
-        n_features = X_test.shape[1]
+        n_features = self.best_estimator.named_steps['pre'].transform(X_test).shape[1]
         metrics['Adjusted R2'] = calculate_adjusted_r2(y_test, y_pred, n_samples, n_features)
-
-        # Log Loss is typically for Classification. 
-        # The requirements mention it, but it's mathematically not standard for Linear Regression 
-        # on continuous targets unless converted availability. Skipping to avoid runtime errors.
         
         return metrics
 
-    def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
+    def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
         """
-        Retrieves diagnostic data for visualization.
-        
-        Includes:
-        - Predictions and Truth values (for Predicted vs Actual plot)
-        - Coefficients (Weights) of independent variables
-        
-        Args:
-            X_test: Test features array.
-            y_test: Test target array.
-            
-        Returns:
-            Dict[str, Any]: Data dictionary for the visualization module.
-            
-        Raises:
-            RuntimeError: If the model has not been trained yet.
+        Retrieves diagnostic data for visualization using the Pipeline.
         """
         if not hasattr(self, 'best_estimator'):
              raise RuntimeError("Model must be fitted before diagnostics.")
              
         y_pred = self.best_estimator.predict(X_test)
+        final_model = self.best_estimator.named_steps['model']
         
         return {
             'y_pred': y_pred,
             'y_test': y_test,
-            'coefficients': self.best_estimator.coef_ if hasattr(self.best_estimator, 'coef_') else None,
+            'coefficients': final_model.coef_ if hasattr(final_model, 'coef_') else None,
             'model_name': self.name
         }
 
-    def get_feature_importance(self) -> Dict[str, float]:
+    def get_feature_importance(self) -> Dict[str, Any]:
         """
-        Retrieves feature importance based on the magnitude of the model coefficients.
-        
-        Returns:
-            Dict[str, float]: Dictionary mapping feature indices to coefficient values.
+        Retrieves feature importance based on model coefficients.
         """
-        if hasattr(self.best_estimator, 'coef_'):
-            # Return absolute coefficients as specific importance magnitude, 
-            # or raw coefficients. Usually map feature names to coefs.
-            # Since we don't have feature names stored in the model object directly 
-            # after Pipeline simple execution, we return the raw array or dict if possible.
-            # For simplicity in this interface, we might just return the array or 
-            # defer to diagnostic plotting which handles the mapping if feature names are passed.
-            return {} 
+        final_model = self.best_estimator.named_steps['model']
+        if hasattr(final_model, 'coef_'):
+            return {'importances': final_model.coef_.tolist()}
         return {}
+
+    def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """
+        Returns descriptions of the most important tuned parameters.
+        """
+        # Access best params from GridSearch results
+        best_params = self.model.best_params_
+        descriptions = {
+            'alpha': {
+                'value': str(best_params.get('model__alpha')),
+                'desc': 'Regularization strength. Higher values increase the penalty for complex models, helping to prevent overfitting.'
+            },
+            'l1_ratio': {
+                'value': str(best_params.get('model__l1_ratio')),
+                'desc': 'The balance between L1 (Lasso) and L2 (Ridge) regularization. 1.0 is full Lasso, 0.0 is full Ridge.'
+            }
+        }
+        return descriptions
 
