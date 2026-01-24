@@ -66,7 +66,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get first line
             const firstLine = text.split('\n')[0];
             // Split by comma (handles basic CSV, not quotes/complex)
-            // For robust parsing, use a library, but this suffices for demo
             const headers = firstLine.split(',').map(h => h.trim().replace(/['"]+/g, ''));
             
             // Populate Dropdown
@@ -134,15 +133,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(status => {
                     if (status.status === 'completed') {
                         clearInterval(interval);
-                        window.location.href = status.redirect;
+                        // Final update to story
+                        updateStory(status.history);
+                        setTimeout(() => {
+                            window.location.href = status.redirect;
+                        }, 1000); // Small delay to see success
                     } else if (status.status === 'failed') {
                         clearInterval(interval);
+                        updateStory(status.history);
                         alert('Training Failed: ' + status.error);
                         loadingOverlay.classList.add('d-none');
                     } else {
                         // Update Progress UI
                         progressBar.style.width = status.progress + '%';
                         statusMessage.textContent = status.message;
+                        if (status.history) {
+                            updateStory(status.history);
+                        }
                     }
                 })
                 .catch(err => {
@@ -150,6 +157,38 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Polling error:', err);
                 });
             }, 1000); // Poll every second
+        }
+
+        function updateStory(history) {
+            const storyContainer = document.getElementById('storyContainer');
+            if (!history || !storyContainer) return;
+
+            storyContainer.innerHTML = ''; // Clear current (or optimized: only append new)
+            
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'story-item';
+                
+                // Color based on type
+                let colorClass = 'text-white';
+                if (item.type === 'success') colorClass = 'text-success';
+                if (item.type === 'danger') colorClass = 'text-danger';
+                if (item.type === 'warning') colorClass = 'text-warning';
+
+                div.innerHTML = `
+                    <div class="story-icon ${colorClass}">
+                        <i class="${item.icon}"></i>
+                    </div>
+                    <div class="story-content text-white">
+                        <div class="story-time">${item.timestamp}</div>
+                        <div class="story-text">${item.message}</div>
+                    </div>
+                `;
+                storyContainer.appendChild(div);
+            });
+
+            // Auto-scroll to bottom
+            storyContainer.scrollTop = storyContainer.scrollHeight;
         }
     });
 });

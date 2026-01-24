@@ -56,6 +56,82 @@
             </div>
         </div>
 
+        <!-- NEW: Pipeline Journey Section -->
+        {% if results.best_model.pipeline_log %}
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-project-diagram text-primary me-2"></i> The Data Journey</h5>
+            </div>
+            <div class="card-body">
+                <div class="position-relative ps-4">
+                    <!-- Vertical Line -->
+                    <div
+                        style="position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #e2e8f0; margin-left: 9px;">
+                    </div>
+
+                    {% for step in results.best_model.pipeline_log %}
+                    <div class="mb-4 position-relative">
+                        <!-- Dot -->
+                        <div
+                            style="position: absolute; left: -34px; top: 0; width: 20px; height: 20px; background: #fff; border: 2px solid #667eea; border-radius: 50%; z-index: 1;">
+                            <i class="{{ step.icon }} text-primary"
+                                style="font-size: 10px; position: absolute; top: 3px; left: 4px;"></i>
+                        </div>
+
+                        <div class="card border-0 bg-light shadow-sm">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <h6 class="fw-bold mb-0 text-dark">{{ step.step }}</h6>
+                                    <small class="text-muted">{{ step.timestamp }}</small>
+                                </div>
+                                <p class="mb-0 small text-muted">{{ step.details }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- NEW: Methodology / Story Section -->
+        {% if results.summary.description %}
+        <div class="card border-0 shadow-sm mb-5 text-white"
+            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px;">
+            <div class="card-body p-4">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="fw-bold mb-3"><i class="fas fa-book-open me-2"></i> The Story Behind {{
+                            results.summary.description.title }}</h4>
+                        <p class="lead mb-4" style="line-height: 1.6; opacity: 0.95;">
+                            {{ results.summary.description.story }}
+                        </p>
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="p-3 rounded" style="background: rgba(255,255,255,0.1);">
+                                    <h6 class="text-uppercase ls-1 opacity-75 mb-2"><i class="fas fa-cogs me-2"></i> How
+                                        it works</h6>
+                                    <p class="small mb-0">{{ results.summary.description.how_it_works }}</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 rounded" style="background: rgba(255,255,255,0.1);">
+                                    <h6 class="text-uppercase ls-1 opacity-75 mb-2"><i
+                                            class="fas fa-check-double me-2"></i> Best Used For</h6>
+                                    <p class="small mb-0">{{ results.summary.description.best_for }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center d-none d-md-block">
+                        <i class="fas fa-lightbulb fa-8x text-white" style="opacity: 0.15;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Leaderboard Table -->
         <div class="card border-0 shadow-sm mb-5">
             <div class="card-header bg-white py-3">

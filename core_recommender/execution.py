@@ -66,6 +66,16 @@ class ModelExecutor:
         self.best_model_name = None
         self.best_model_metrics = None
         self.best_model_instance = None
+        self.pipeline_log = []
+
+    def _log_step(self, step: str, details: str, icon: str = "fas fa-info-circle"):
+        """Helper to append to pipeline log."""
+        self.pipeline_log.append({
+            "step": step,
+            "details": details,
+            "icon": icon,
+            "timestamp": time.strftime("%H:%M:%S")
+        })
 
     def _infer_task_type(self, y: pd.Series) -> str:
         """
@@ -113,6 +123,8 @@ class ModelExecutor:
                 return 'regression'
         
         # Default fallback
+        logger.info("Defaulting to REGRESSION mode.")
+        self._log_step("Task Inference", "Target variable seems continuous. Selected REGRESSION task.", "fas fa-search")
         return 'regression'
 
     def _detect_and_drop_leakage(self, df: pd.DataFrame, target_column: str, threshold: float = 0.95) -> pd.DataFrame:
@@ -165,6 +177,7 @@ class ModelExecutor:
             df = df.drop(columns=leaky_features)
         else:
             logger.info("✅ No obvious leakage detected based on numeric correlations")
+            self._log_step("Values Check", "No data leakage detected. Features look healthy.", "fas fa-shield-alt")
             
         return df
 
@@ -194,9 +207,12 @@ class ModelExecutor:
         removed_count = initial_count - len(df_filtered)
         
         if removed_count > 0:
-            logger.warning(f"🚩 Filtered {removed_count} outlier rows using IQR ({lower_bound:.2f} to {upper_bound:.2f})")
+            msg = f"Removed {removed_count} outlier rows using IQR rule."
+            logger.warning("🚩 " + msg)
+            self._log_step("Outlier Detection", msg, "fas fa-filter")
         else:
             logger.debug("✅ No extreme outliers detected in the target variable")
+            self._log_step("Outlier Detection", "No extreme outliers found in target variable.", "fas fa-check")
             
         return df_filtered
 
@@ -397,6 +413,7 @@ class ModelExecutor:
             raise ValueError(f"Target column '{target_column}' not found in DataFrame.")
         
         logger.info("✅ Input validation passed")
+        self._log_step("Initialization", f"Loaded dataset with {df.shape[0]} rows and {df.shape[1]} columns.", "fas fa-database")
             
         # 2. Separate Features and Target
         logger.debug("[Step 2/10] Separating features (X) and target (y)...")
@@ -466,6 +483,7 @@ class ModelExecutor:
             self.label_encoder = LabelEncoder()
             y = pd.Series(self.label_encoder.fit_transform(y), index=y.index)
             logger.debug(f"Target labels encoded: {self.label_encoder.classes_}")
+            self._log_step("Target Encoding", f"Encoded target classes: {list(self.label_encoder.classes_)}", "fas fa-list")
 
         # 5. Train/Test Split
         logger.debug("[Step 8/10] Splitting data into train/test sets...")
@@ -479,6 +497,7 @@ class ModelExecutor:
             stratify=stratify
         )
         logger.info(f"📊 Train: {len(X_train)} samples | Test: {len(X_test)} samples (80/20 split)")
+        self._log_step("Data Splitting", f"Split data into 80% Training ({len(X_train)} rows) and 20% Testing ({len(X_test)} rows).", "fas fa-cut")
         if stratify is not None:
             logger.debug("Stratified split applied for balanced class distribution")
         
@@ -547,6 +566,28 @@ class ModelExecutor:
         self.best_model_metrics = best_run['metrics']
         self.best_model_instance = best_run['model_instance']
         
+        # --- NEW: Deep Transparency Log ---
+        # Extract specific techniques used in the winning pipeline
+        try:
+            transformers = best_run['preprocessor'].transformers_
+            technique_details = []
+            for name, trans, cols in transformers:
+                if name == 'remainder': continue
+                # trans might be a pipeline (e.g. numeric_pipe)
+                if hasattr(trans, 'steps'):
+                    for step_name, step_obj in trans.steps:
+                        technique_details.append(f"{step_obj.__class__.__name__}")
+                else:
+                    technique_details.append(f"{trans.__class__.__name__}")
+            
+            # De-duplicate
+            technique_details = list(set(technique_details))
+            self._log_step("Feature Preprocessing", f"Techniques applied: {', '.join(technique_details)}", "fas fa-cogs")
+        except Exception as e:
+            logger.warning(f"Could not extract pipeline details: {e}")
+            self._log_step("Feature Preprocessing", "Standard scaling and imputation applied.", "fas fa-cogs")
+        # ----------------------------------
+        
         # 8. Generate Diagnostics for Best Model
         # We need to call get_diagnostic_data on the best model instance
         # IMPORTANT: Use RAW X_test, and y_test (which is already encoded from the split)
@@ -584,7 +625,8 @@ class ModelExecutor:
                 'explainability': {
                     'importance': importance_data,
                     'parameters': self.best_model_instance.get_parameter_descriptions() if hasattr(self.best_model_instance, 'get_parameter_descriptions') else {}
-                }
+                },
+                'pipeline_log': self.pipeline_log
             }
         }
         

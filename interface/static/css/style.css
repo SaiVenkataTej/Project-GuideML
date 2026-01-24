@@ -153,3 +153,51 @@ body {
     align-items: center;
     backdrop-filter: blur(5px);
 }
+
+/* Story Timeline Styles */
+.story-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 15px;
+    opacity: 0;
+    animation: fadeInUp 0.5s forwards;
+}
+
+.story-icon {
+    width: 30px;
+    text-align: center;
+    margin-right: 15px;
+    padding-top: 4px;
+}
+
+.story-content {
+    flex: 1;
+}
+
+.story-time {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    margin-bottom: 2px;
+}
+
+.story-text {
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scrollbar for story container */
+#storyContainer::-webkit-scrollbar {
+    width: 6px;
+}
+#storyContainer::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+#storyContainer::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
