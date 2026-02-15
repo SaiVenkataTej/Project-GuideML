@@ -15,7 +15,6 @@ from sklearn.preprocessing import (
     RobustScaler,
     OneHotEncoder,
     OrdinalEncoder,
-
     FunctionTransformer,
     PowerTransformer
 )
@@ -24,16 +23,14 @@ from sklearn.feature_selection import (
     SelectKBest,
     f_regression,
     f_classif,
-    SelectFromModel,
-    RFE,
     chi2,
-    mutual_info_classif
+    mutual_info_classif,
+    RFE,
+    SelectFromModel
 )
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NeighborhoodComponentsAnalysis as NCA
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
+from sklearn.base import BaseEstimator
 from sklearn.impute import SimpleImputer
 
 
@@ -43,24 +40,13 @@ from sklearn.impute import SimpleImputer
 
 def get_imputer(strategy: Literal['mean', 'median', 'most_frequent', 'constant'] = 'median',
                 fill_value: Optional[Any] = None) -> SimpleImputer:
-    """
-    Returns a configured SimpleImputer object for handling missing values.
-
-    Rationale:
-    ----------
-    Missing data is common in real-world datasets.
-    - **Median** is robust to outliers and preferred for continuous data.
-    - **Most Frequent** is the standard for categorical data.
-    - **Constant** is useful when "missing" itself is a signal (e.g., missing credit score = no credit history).
+    """Returns a configured SimpleImputer object for handling missing values.
 
     Args:
-        strategy: The imputation strategy. 
-                  - 'median': Use median of non-missing values (Robust).
-                  - 'mean': Use mean of non-missing values (Sensitive to outliers).
-                  - 'most_frequent': Use mode (For categorical/discrete).
-                  - 'constant': Replace with `fill_value`.
-                  Defaults to 'median'.
-        fill_value: constant value to use when strategy='constant'. Defaults to None.
+        strategy (str): The imputation strategy. 
+                        Options: 'median', 'mean', 'most_frequent', 'constant'.
+                        Defaults to 'median'.
+        fill_value (Any, optional): Constant value to use when strategy='constant'. Defaults to None.
         
     Returns:
         SimpleImputer: A scikit-learn SimpleImputer instance ready for fitting.
@@ -75,21 +61,12 @@ def get_imputer(strategy: Literal['mean', 'median', 'most_frequent', 'constant']
 
 def get_one_hot_encoder(handle_unknown: Literal['error', 'ignore'] = 'ignore',
                         sparse_output: bool = False) -> OneHotEncoder:
-    """
-    Returns a configured OneHotEncoder object for nominal categorical variables.
-
-    Rationale:
-    ----------
-    Machine Learning algorithms require numerical input.
-    - **One-Hot Encoding** creates binary columns for each category, avoiding the implied order of ordinal encoding (e.g., Red < Blue < Green is false).
-    - **Handle Unknown='ignore'** is critical for production systems to prevent crashes when new, unseen categories appear in test data.
+    """Returns a configured OneHotEncoder object for nominal categorical variables.
 
     Args:
-        handle_unknown: Strategy to handle new categories found in test data but not training data.
-                        - 'ignore': Recommended for production robustness (all resulting OHE columns will be 0).
-                        - 'error': Raises error on new categories (strict validation).
-                        Defaults to 'ignore'.
-        sparse_output: Whether to return a sparse matrix. Defaults to False (dense output) for easier debugging with Pandas.
+        handle_unknown (str): Strategy to handle new categories found in test data.
+                              Options: 'ignore', 'error'. Defaults to 'ignore'.
+        sparse_output (bool): Whether to return a sparse matrix. Defaults to False.
 
     Returns:
         OneHotEncoder: A scikit-learn OneHotEncoder instance.
@@ -98,16 +75,12 @@ def get_one_hot_encoder(handle_unknown: Literal['error', 'ignore'] = 'ignore',
 
 def get_ordinal_encoder(handle_unknown: Literal['error', 'use_encoded_value'] = 'use_encoded_value',
                         unknown_value: int = -1) -> OrdinalEncoder:
-    """
-    Returns a configured OrdinalEncoder object for ordinal categorical variables.
+    """Returns a configured OrdinalEncoder object for ordinal categorical variables.
     
     Args:
-        handle_unknown: Strategy to handle new categories.
-                        - 'use_encoded_value': Assigns a specific value to unknowns.
-                        - 'error': Raises error.
-                        Defaults to 'use_encoded_value'.
-        unknown_value: The integer value to use for unknown categories if handle_unknown is 'use_encoded_value'.
-                       Defaults to -1.
+        handle_unknown (str): Strategy to handle new categories.
+                              Options: 'use_encoded_value', 'error'. Defaults to 'use_encoded_value'.
+        unknown_value (int): The integer value to use for unknown categories. Defaults to -1.
 
     Returns:
         OrdinalEncoder: A scikit-learn OrdinalEncoder instance.
@@ -121,14 +94,9 @@ def get_ordinal_encoder(handle_unknown: Literal['error', 'use_encoded_value'] = 
 # =============================================================================
 
 def get_standard_scaler() -> StandardScaler:
-    """
-    Returns a configured StandardScaler for Z-score normalization.
+    """Returns a configured StandardScaler for Z-score normalization.
     
-    Rationale:
-    ----------
-    - Centers data to Mean = 0 and Variance = 1.
-    - Crucial for distance-based algorithms (SVM, KNN) and linear models (Ridge/Lasso) to ensure all features contribute equally.
-    - Assumes data follows a roughly Gaussian distribution.
+    Centers data to Mean = 0 and Variance = 1.
     
     Returns:
         StandardScaler: A scikit-learn StandardScaler instance.
@@ -136,8 +104,8 @@ def get_standard_scaler() -> StandardScaler:
     return StandardScaler()
 
 def get_minmax_scaler() -> MinMaxScaler:
-    """
-    Returns a configured MinMaxScaler.
+    """Returns a configured MinMaxScaler.
+    
     Scales features to a given range, typically [0, 1].
     
     Returns:
@@ -146,8 +114,8 @@ def get_minmax_scaler() -> MinMaxScaler:
     return MinMaxScaler()
 
 def get_robust_scaler() -> RobustScaler:
-    """
-    Returns a configured RobustScaler.
+    """Returns a configured RobustScaler.
+    
     Scales features using statistics that are robust to outliers (quartiles).
     
     Returns:
@@ -161,14 +129,9 @@ def get_robust_scaler() -> RobustScaler:
 # =============================================================================
 
 def get_log_transformer() -> FunctionTransformer:
-    """
-    Returns a FunctionTransformer applying np.log1p (log(1+x)).
+    """Returns a FunctionTransformer applying np.log1p (log(1+x)).
     
-    Rationale:
-    ----------
-    - **Skewness Reduction**: Many real-world variables (e.g., Income, Population) have a "long tail".
-    - Log transform compresses the tail, making the distribution more Normal (Gaussian).
-    - **np.log1p** is used instead of np.log to handle zero values safely (log(0) is undefined).
+    Used to reduce skewness and compress long tails in distribution.
 
     Returns:
         FunctionTransformer: A scikit-learn FunctionTransformer instance configured for log transformation.
@@ -176,9 +139,9 @@ def get_log_transformer() -> FunctionTransformer:
     return FunctionTransformer(func=np.log1p, inverse_func=np.expm1, validate=True)
 
 def get_box_cox_transformer() -> PowerTransformer:
-    """
-    Returns a PowerTransformer configured for Box-Cox transformation.
-    Requires input data to be strictly positive. Stabilizes variance and makes data more Gaussian-like.
+    """Returns a PowerTransformer configured for Box-Cox transformation.
+    
+    Requires input data to be strictly positive.
 
     Returns:
         PowerTransformer: A scikit-learn PowerTransformer instance (method='box-cox').
@@ -186,9 +149,9 @@ def get_box_cox_transformer() -> PowerTransformer:
     return PowerTransformer(method='box-cox')
 
 def get_yeo_johnson_transformer() -> PowerTransformer:
-    """
-    Returns a PowerTransformer configured for Yeo-Johnson transformation.
-    Supports zero and negative data, unlike Box-Cox.
+    """Returns a PowerTransformer configured for Yeo-Johnson transformation.
+    
+    Supports zero and negative data.
 
     Returns:
         PowerTransformer: A scikit-learn PowerTransformer instance (method='yeo-johnson').
@@ -201,12 +164,10 @@ def get_yeo_johnson_transformer() -> PowerTransformer:
 # =============================================================================
 
 def get_variance_threshold(threshold: float = 0.0) -> VarianceThreshold:
-    """
-    Returns a VarianceThreshold object to remove low-variance features.
+    """Returns a VarianceThreshold object to remove low-variance features.
 
     Args:
-        threshold: Features with variance lower than this threshold will be removed.
-                   Defaults to 0.0 (removes constant features).
+        threshold (float): Features with variance lower than this will be removed. Defaults to 0.0.
 
     Returns:
         VarianceThreshold: A scikit-learn VarianceThreshold instance.
@@ -215,13 +176,12 @@ def get_variance_threshold(threshold: float = 0.0) -> VarianceThreshold:
 
 def get_select_k_best(k: int = 10, 
                       score_func: Union[str, Callable] = 'f_regression') -> SelectKBest:
-    """
-    Returns a configured SelectKBest object to select the top 'k' features.
+    """Returns a configured SelectKBest object to select the top 'k' features.
 
     Args:
-        k: Number of top features to select. Defaults to 10.
-        score_func: Measures the dependency between features and target.
-                    Options: 'f_regression', 'f_classif', 'chi2', 'mutual_info_classif', or a custom callable.
+        k (int): Number of top features to select. Defaults to 10.
+        score_func (Union[str, Callable]): Measures dependency between features and target.
+                    Options: 'f_regression', 'f_classif', 'chi2', 'mutual_info_classif'.
                     Defaults to 'f_regression'.
 
     Returns:
@@ -240,7 +200,7 @@ def get_select_k_best(k: int = 10,
         elif score_func == 'mutual_info_classif':
             func = mutual_info_classif
         else:
-            raise ValueError(f"Unknown score_func string: {score_func}. Use 'f_regression', 'f_classif', 'chi2', or 'mutual_info_classif'.")
+            raise ValueError(f"Unknown score_func string: {score_func}.")
     else:
         func = score_func
         
@@ -249,17 +209,12 @@ def get_select_k_best(k: int = 10,
 def get_rfe_selector(estimator: BaseEstimator, 
                      n_features_to_select: Union[int, float] = 10,
                      step: Union[int, float] = 1) -> RFE:
-    """
-    Returns a configured Recursive Feature Elimination (RFE) object.
-    
-    RFE fits a model and removes the weakest feature (or features) until the specified number of features is reached.
+    """Returns a configured Recursive Feature Elimination (RFE) object.
 
     Args:
-        estimator: The base estimator (model) used to assign weights/importance to features.
-        n_features_to_select: The target number of features to select. 
-                              If float between 0.0 and 1.0, it represents the percentage of features to select.
-                              Defaults to 10.
-        step: The number of features to remove at each iteration. Defaults to 1.
+        estimator (BaseEstimator): The base estimator (model) used to assign weights.
+        n_features_to_select (Union[int, float]): Target number or percentage of features. Defaults to 10.
+        step (Union[int, float]): Number of features to remove at each iteration. Defaults to 1.
 
     Returns:
         RFE: A scikit-learn RFE instance.
@@ -270,55 +225,38 @@ def get_rfe_selector(estimator: BaseEstimator,
 
 def get_select_from_model(estimator: BaseEstimator, 
                           threshold: Union[str, float] = 'median') -> SelectFromModel:
-    """
-    Returns a configured SelectFromModel object.
-    
-    Selects features based on importance weights (coefficients or feature importances).
+    """Returns a configured SelectFromModel object.
 
     Args:
-        estimator: The base estimator used to compute feature importance.
-                   Must have `coef_` or `feature_importances_` attribute after fitting.
-        threshold: The threshold value to use for feature selection.
-                   Features with importance >= threshold are kept.
-                   Can be 'median', 'mean', or a float value. Defaults to 'median'.
+        estimator (BaseEstimator): The base estimator used to compute feature importance.
+        threshold (Union[str, float]): The threshold value to use for feature selection.
+                                       Defaults to 'median'.
     
     Returns:
         SelectFromModel: A scikit-learn SelectFromModel instance.
     """
-    # Note: SelectFromModel expects the estimator to be an *instance*, 
-    # but the fitting happens when SelectFromModel is used in a pipeline step.
     return SelectFromModel(estimator=estimator, threshold=threshold)
 
 def get_pca_reducer(n_components: Union[int, float, None] = 0.95) -> PCA:
-    """
-    Returns a configured Principal Component Analysis (PCA) object for dimensionality reduction.
-
-    Rationale:
-    ----------
-    - **Noise Reduction**: Removes dimensions with low variance which often represent noise.
-    - **Collinearity Removal**: Produces orthogonal (uncorrelated) components.
-    - **Efficiency**: Reduces training time by shrinking the feature space.
+    """Returns a configured Principal Component Analysis (PCA) object.
 
     Args:
-        n_components: Desired dimensionality.
-                      - If int >= 1: Exact number of components.
-                      - If float 0.0 < n <= 1.0: Minimum fraction of variance to explain (Adaptive).
-                      Defaults to 0.95 (Keep enough components to explain 95% of original variance).
+        n_components (Union[int, float, None]): Desired dimensionality.
+                      If float < 1.0, represents variance to explain.
+                      Defaults to 0.95.
 
     Returns:
         PCA: A scikit-learn PCA instance.
     """
     return PCA(n_components=n_components)
+
 def get_nca_reducer(n_components: Optional[int] = None, 
                     random_state: Optional[int] = None) -> NCA:
-    """
-    Returns a configured Neighborhood Components Analysis (NCA) object.
-    
-    NCA learns a linear transformation that maximizes stochastic nearest neighbor accuracy.
+    """Returns a configured Neighborhood Components Analysis (NCA) object.
 
     Args:
-        n_components: Number of components to keep. If None, all components are kept.
-        random_state: Seed for reproducibility. Defaults to None.
+        n_components (Optional[int]): Number of components to keep. Defaults to None.
+        random_state (Optional[int]): Seed for reproducibility. Defaults to None.
 
     Returns:
         NCA: A scikit-learn NeighborhoodComponentsAnalysis instance.

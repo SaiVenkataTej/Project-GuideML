@@ -1,7 +1,7 @@
 import optuna
 import numpy as np
-from typing import Dict, Any, Callable, List, Optional
-from sklearn.model_selection import GridSearchCV, cross_val_score
+from typing import Dict, Any, Callable, List, Optional, Union
+from sklearn.model_selection import GridSearchCV, cross_val_score, RandomizedSearchCV
 from sklearn.base import BaseEstimator
 
 # Import centralized logger
@@ -21,22 +21,16 @@ def get_grid_search_tuner(
     n_jobs: int = -1,
     verbose: int = 1
 ) -> GridSearchCV:
-    """
-    Returns a configured GridSearchCV object (Standard Exhaustive Search).
-    
-    Rationale:
-    ----------
-    - **Exhaustive**: Tries *every combination* of parameters in the grid.
-    - **Reliable**: Guaranteed to find the best combination within the specified grid.
-    - **Costly**: Can be very slow if the parameter space is large.
+    """Returns a configured GridSearchCV object for exhaustive hyperparameter search.
 
     Args:
-        estimator: The scikit-learn model instance to tune.
-        param_grid: Dictionary with parameters names (str) as keys and lists of parameter settings to try as values.
-        cv: Cross-validation splitting strategy (e.g., KFold object).
-        scoring: A single string (e.g., 'accuracy') or a callable to evaluate the predictions on the test set.
-        n_jobs: Number of jobs to run in parallel. Defaults to -1 (all processors).
-        verbose: Controls the verbosity: the higher, the more messages.
+        estimator (BaseEstimator): The scikit-learn model instance to tune.
+        param_grid (Dict[str, List[Any]]): Dictionary with parameter names as keys and lists 
+            of parameter settings to try as values.
+        cv (Any): Cross-validation splitting strategy (e.g., KFold object or int).
+        scoring (str): A single string (e.g., 'accuracy') or a callable to evaluate predictions.
+        n_jobs (int, optional): Number of jobs to run in parallel. Defaults to -1.
+        verbose (int, optional): Controls verbosity. Defaults to 1.
 
     Returns:
         GridSearchCV: The configured grid search object ready for fitting.
@@ -59,24 +53,23 @@ def get_random_search_tuner(
     n_jobs: int = -1,
     verbose: int = 1,
     random_state: int = 42
-) -> Any:
-    """
-    Returns a configured RandomizedSearchCV object (Random Sampling Search).
-    
+) -> RandomizedSearchCV:
+    """Returns a configured RandomizedSearchCV object for random hyperparameter sampling.
+
     Args:
-        estimator: The scikit-learn model instance.
-        param_distributions: Dictionary with parameters names (str) as keys and distributions or lists as values.
-        cv: Cross-validation splitting strategy.
-        scoring: Scoring metric string.
-        n_iter: Number of parameter settings that are sampled.
-        n_jobs: Number of jobs to run in parallel.
-        verbose: Controls verbosity.
-        random_state: Seed for random number generator.
+        estimator (BaseEstimator): The scikit-learn model instance.
+        param_distributions (Dict[str, Any]): Dictionary with parameter names as keys and 
+            distributions or lists as values.
+        cv (Any): Cross-validation splitting strategy.
+        scoring (str): Scoring metric string.
+        n_iter (int, optional): Number of parameter settings that are sampled. Defaults to 10.
+        n_jobs (int, optional): Number of jobs to run in parallel. Defaults to -1.
+        verbose (int, optional): Controls verbosity. Defaults to 1.
+        random_state (int, optional): Seed for random number generator. Defaults to 42.
 
     Returns:
         RandomizedSearchCV: The configured random search object.
     """
-    from sklearn.model_selection import RandomizedSearchCV
     return RandomizedSearchCV(
         estimator=estimator,
         param_distributions=param_distributions,
@@ -98,23 +91,24 @@ def get_halving_grid_search_tuner(
     verbose: int = 1,
     random_state: int = 42
 ) -> Any:
-    """
-    Returns a configured HalvingGridSearchCV object (Successive Halving).
-    
+    """Returns a configured HalvingGridSearchCV object using successive halving.
+
     Args:
-        estimator: The scikit-learn model instance.
-        param_grid: Dictionary with parameters names (str) as keys and lists of parameter settings.
-        cv: Cross-validation splitting strategy.
-        scoring: Scoring metric string.
-        factor: The 'halving' parameter, determining the proportion of candidates selected for each subsequent iteration.
-        n_jobs: Number of jobs to run in parallel.
-        verbose: Controls verbosity.
-        random_state: Seed for random number generator.
+        estimator (BaseEstimator): The scikit-learn model instance.
+        param_grid (Dict[str, List[Any]]): Dictionary with parameter names as keys and lists of settings.
+        cv (Any): Cross-validation splitting strategy.
+        scoring (str): Scoring metric string.
+        factor (int, optional): The 'halving' parameter. Defaults to 3.
+        n_jobs (int, optional): Number of jobs to run in parallel. Defaults to -1.
+        verbose (int, optional): Controls verbosity. Defaults to 1.
+        random_state (int, optional): Seed for random number generator. Defaults to 42.
 
     Returns:
         HalvingGridSearchCV: The configured halving grid search object.
+
+    Raises:
+        ImportError: If scikit-learn version is too old or experimental import fails.
     """
-    # HalvingGridSearchCV is experimental in some versions, import locally to handle potential variability
     try:
         from sklearn.experimental import enable_halving_search_cv  # noqa
         from sklearn.model_selection import HalvingGridSearchCV
@@ -144,50 +138,45 @@ def run_optuna_optimization(
     n_jobs: int = -1,
     random_state: int = 42
 ) -> BaseEstimator:
-    """
-    Executes an Optuna hyperparameter optimization study (Bayesian Optimization) and returns the best fitted model.
+    """Executes an Optuna hyperparameter optimization study and returns the best fitted model.
     
-    Rationale:
-    ----------
-    - **Efficient**: Uses Bayesian Optimization (TPE) to pinpoint promising areas of the hyperparameter space, rather than searching blindly.
-    - **Fast**: Converges to optimal parameters much faster than Grid Search or Random Search for high-dimensional spaces.
-    
+    Uses Bayesian Optimization (TPE) to pinpoint promising areas of the hyperparameter space.
+
     Args:
-        estimator_class: The class of the model to instantiate (e.g., KNeighborsClassifier). Not an instance.
-        param_space_func: A function that takes an optuna.Trial and returns a dictionary of hyperparameters.
-        X: Training features.
-        y: Training target.
-        cv: Cross-validation splitting strategy.
-        scoring: Scoring metric string.
-        n_trials: Number of trials (iterations) for optimization. Defaults to 20.
-        timeout: Stop study after the given number of seconds. Defaults to None.
-        n_jobs: Number of parallel jobs for the *model* (if applicable). 
-        random_state: Seed for the sampler.
+        estimator_class (Any): The class of the model to instantiate. Not an instance.
+        param_space_func (Callable[[optuna.Trial], Dict[str, Any]]): Function that takes a trial 
+            and returns hyperparameters.
+        X (np.ndarray): Training features.
+        y (np.ndarray): Training target.
+        cv (Any): Cross-validation splitting strategy.
+        scoring (str): Scoring metric string.
+        n_trials (int, optional): Number of trials for optimization. Defaults to 20.
+        timeout (Optional[int], optional): Stop study after given seconds. Defaults to None.
+        n_jobs (int, optional): Number of parallel jobs for the model. Defaults to -1.
+        random_state (int, optional): Seed for the sampler. Defaults to 42.
 
     Returns:
-        BaseEstimator: The best model found, already fitted on the full dataset.
-                       The returned model has an attached attribute `.study_` containing the Optuna study.
+        BaseEstimator: The best model found, fitted on the full dataset.
+                       Includes a `.study_` attribute containing the Optuna study.
     """
     
-    def objective(trial):
+    def objective(trial: optuna.Trial) -> float:
         # 1. Suggest params using the user-provided function
         params = param_space_func(trial)
         
         # 2. Instantiate model
         # We try to pass n_jobs to the model constructor if it accepts it.
-        # This allows the model to use parallelism during its own fit/predict if CV is serial.
         try:
             model = estimator_class(**params, n_jobs=n_jobs)
         except TypeError:
-            # Fallback if model doesn't accept n_jobs (e.g., some simple regressors)
+            # Fallback if model doesn't accept n_jobs
             model = estimator_class(**params)
 
         # 3. Cross-validate
-        # We enforce n_jobs=1 for cross_val_score to avoid nested parallelism oversubscription
-        # (Model handles threads internally via n_jobs, or Optuna runs sequential trials)
+        # Enforce n_jobs=1 for cross_val_score to avoid nested parallelism
         scores = cross_val_score(model, X, y, cv=cv, scoring=scoring, n_jobs=1)
         
-        return scores.mean()
+        return float(scores.mean())
 
     # Optuna setup
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -195,7 +184,7 @@ def run_optuna_optimization(
     study = optuna.create_study(direction='maximize', sampler=sampler)
     
     logger.info(f"   [Optuna] Running {n_trials} trials...")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    study.optimize(objective, n_trials=n_trials, timeout=timeout, show_progress_bar=False)
     
     logger.info(f"   [Optuna] Completed {n_trials} trials")
     logger.info(f"   [Optuna] Best Score: {study.best_value:.4f}")
@@ -211,7 +200,7 @@ def run_optuna_optimization(
          
     best_model.fit(X, y)
     
-    # Attach study for future diagnostics (e.g. elbow plots, parallel ccoard)
+    # Attach study for future diagnostics
     best_model.study_ = study
     
     return best_model
