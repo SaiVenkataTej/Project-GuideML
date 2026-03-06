@@ -38,8 +38,6 @@ class DataProfiler:
         
         self.profile = {}
         self.suggestions = {
-            'priority_models': [],
-            'exclude_models': [],
             'config_overrides': {},
             'messages': []
         }
@@ -118,53 +116,44 @@ class DataProfiler:
         }
 
     def _generate_rules(self, y: pd.Series) -> None:
-        """Applies heuristic rules based on the profile to generate suggestions.
+        """Applies heuristic rules based on the profile to generate informational messages.
         
         Args:
-            y (pd.Series): The target variable, used for class balance checks.
+            y (pd.Series): The target variable.
         """
         
         # Rule 1: Dataset Size vs Complexity
         if self.profile.get('n_samples', 0) > 20000:
-            msg = "Large dataset detected (>20k samples). Suggesting exclusion of slow models (SVM-RBF, KNN)."
+            msg = "Large dataset detected (>20k samples). Training complex models (SVM, KNN) might be slow."
             self.suggestions['messages'].append(msg)
-            self.suggestions['exclude_models'].extend(['SVM', 'KNN'])
             
         # Rule 2: High Dimensionality -> Regularization
-        # If n_features > n_samples (or close)
         if self.profile.get('n_features', 0) > self.profile.get('n_samples', 0):
-            msg = "High dimensionality (p > n) detected. Prioritizing Regularized Linear Models (Lasso/Ridge)."
+            msg = "High dimensionality (p > n) detected. Regularization recommended."
             self.suggestions['messages'].append(msg)
-            self.suggestions['priority_models'].extend(['Linear Regression', 'Logistic Regression'])
             
         # Rule 3: Gaussian Distribution
         if self.profile.get('is_gaussian'):
-            msg = "Features appear normally distributed. Gaussian Naive Bayes is a strong candidate."
+            msg = "Features appear normally distributed."
             self.suggestions['messages'].append(msg)
-            self.suggestions['priority_models'].append('Naive Bayes')
             
         # Rule 4: Linearity (for Numeric Targets)
         max_lin = self.profile.get('max_linear_score', 0)
-        # Handle NaN case if correlation failed
         if pd.isna(max_lin): max_lin = 0.0
             
         if max_lin > 0.7:
-             msg = "Strong linear relationship detected (>0.7 correlation). Linear Regression likely to perform well."
+             msg = "Strong linear relationship detected (>0.7 correlation)."
              self.suggestions['messages'].append(msg)
-             self.suggestions['priority_models'].append('Linear Regression')
         elif max_lin < 0.2 and self.profile.get('n_samples', 0) > 100 and pd.api.types.is_numeric_dtype(y):
-             # Weak linear signal -> Non-linear models
-             msg = "Weak linear signal. Prioritizing Non-Linear models (Random Forest, Decision Tree)."
+             msg = "Weak linear signal detected."
              self.suggestions['messages'].append(msg)
-             self.suggestions['priority_models'].extend(['Random Forest', 'Decision Tree'])
 
         # Rule 5: Class Balance (Classification)
         if not pd.api.types.is_numeric_dtype(y) or (pd.api.types.is_integer_dtype(y) and y.nunique() < 20): 
-             # Rough check for classification
              if not y.empty:
                  val_counts = y.value_counts(normalize=True)
                  if not val_counts.empty:
                      min_class = val_counts.min()
                      if min_class < 0.1: # Less than 10%
-                          msg = f"Class imbalance detected (minority class: {min_class:.1%}). Ensure 'balanced' class weights."
+                          msg = f"Class imbalance detected (minority class: {min_class:.1%})."
                           self.suggestions['messages'].append(msg)

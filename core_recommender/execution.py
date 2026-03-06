@@ -259,16 +259,16 @@ class ModelExecutor:
         logger.info(f"Training {len(selected_models)} selected models: {[m.name for m in selected_models]}")
         return selected_models
 
-    def _train_single_model(self, model: BaseModel, X_train: pd.DataFrame, y_train: np.ndarray, 
-                            X_test: pd.DataFrame, y_test: np.ndarray, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    def _train_single_model(self, model: BaseModel, X_train: pd.DataFrame, y_train: Union[pd.Series, np.ndarray], 
+                            X_test: pd.DataFrame, y_test: Union[pd.Series, np.ndarray], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
         """Trains and evaluates a single model.
         
         Args:
             model (BaseModel): The model instance.
             X_train (pd.DataFrame): Training features.
-            y_train (np.ndarray): Training targets (encoded).
+            y_train (Union[pd.Series, np.ndarray]): Training targets.
             X_test (pd.DataFrame): Test features.
-            y_test (np.ndarray): Test targets (encoded).
+            y_test (Union[pd.Series, np.ndarray]): Test targets.
             progress_callback (Optional[Callable]): Callback for progress updates.
 
         Returns:
@@ -419,7 +419,7 @@ class ModelExecutor:
         for msg in suggestions.get('messages', []):
             self._log_step("Intelligent Profiling", msg, "fas fa-brain")
             
-        excluded_models = suggestions.get('exclude_models', [])
+
 
         # Leakage
         temp_df = pd.concat([X, y], axis=1)
@@ -464,9 +464,7 @@ class ModelExecutor:
         # 7. Model Selection
         models = self._get_candidate_models(inferred_task, include_models=include_models)
         
-        # Filter excluded models from profiling
-        if excluded_models:
-            models = [m for m in models if m.__class__.__name__.replace('Model', '') not in excluded_models]
+
 
         if progress_callback:
             progress_callback(10, f"Starting training on {len(models)} models...")
@@ -486,7 +484,7 @@ class ModelExecutor:
                     progress_callback(global_p, msg)
 
             result = self._train_single_model(
-                model, X_train, y_train.values, X_test, y_test.values, 
+                model, X_train, y_train, X_test, y_test, 
                 progress_callback=sub_step_callback
             )
             results_list.append(result)

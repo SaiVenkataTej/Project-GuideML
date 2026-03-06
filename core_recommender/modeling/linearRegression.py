@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
 
 # --- SKLEARN IMPORTS ---
-from sklearn.linear_model import ElasticNet, LinearRegression, Ridge, Lasso
+from sklearn.linear_model import ElasticNet
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import KFold, GridSearchCV
+from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
@@ -27,7 +28,6 @@ from core_recommender.evaluation import (
     calculate_r2_score, 
     calculate_adjusted_r2
 )
-from core_recommender.visualization import plot_coefficient_bar_chart
 
 # Import centralized logger
 from core_recommender.logger import get_logger
@@ -38,7 +38,7 @@ CONFIG = {
     'scaler': 'standard',      # 'standard' or 'robust'
     'transformation': 'none',  # 'none', 'log', 'box-cox', 'yeo-johnson'
     'feature_selection': 'none', # 'none', 'variance', 'k_best'
-    'cv_folds': 5,
+    'cv_folds': 3,
     'random_state': 42,
     'n_jobs': -1
 }
@@ -48,32 +48,25 @@ CONFIG = {
 # =========================================================================
 
 class LinearRegressionModel(BaseModel):
-    """
-    A concrete implementation of Linear Regression optimized for Regression tasks.
+    """A concrete implementation of Linear Regression optimized for Regression tasks.
     
-    Rationale:
-    ----------
-    - **ElasticNet Base**: We use ElasticNet because it generalizes Ridge (L2) and Lasso (L1) regularization.
-    - **Multicollinearity Handling**: Regularization (L1/L2) is crucial when features are correlated, which is common in automated pipelines.
-    - **Interpretability**: Coefficients provide a direct measure of feature impact (Magnitude and Direction).
-
-    This model utilizes ElasticNet, which generalizes Ridge (L2 penalty) and Lasso (L1 penalty)
-    regularization. This allows for both variable selection and coefficient shrinkage.
+    Utilizes ElasticNet which generalizes Ridge (L2) and Lasso (L1) regularization,
+    allowing for both variable selection and coefficient shrinkage.
+    
+    Attributes:
+        model_instance (ElasticNet): The underlying Scikit-learn estimator.
+        param_grid (Dict[str, List[Any]]): Hyperparameter grid for tuning.
+        preprocessor (ColumnTransformer): The feature engineering pipeline.
+        best_estimator (Pipeline): The fitted pipeline after tuning.
     """
-    def __init__(self, config: Dict[str, Any] = CONFIG):
-        """
-        Initializes the Linear Regression model with configurable regularization.
+    
+    def __init__(self, config: Dict[str, Any] = CONFIG) -> None:
+        """Initializes the Linear Regression model.
 
         Args:
-            config: Dictionary containing hyperparameters (e.g., 'alpha', 'l1_ratio').
-                    Defaults to the global CONFIG dictionary.
+            config (Dict[str, Any], optional): Dictionary containing hyperparameters. 
+                Defaults to the global CONFIG dictionary.
         """
-        
-        # We use ElasticNet as the base estimator because it generalizes Lasso (l1_ratio=1) 
-        # and Ridge (l1_ratio=0), allowing us to tune both via GridSearchCV.
-        # However, for pure OLS, one could use LinearRegression(). 
-        # Given the requirements ask for Ridge/Lasso/ElasticNet, ElasticNet is the best cover-all.
-        
         super().__init__(
             name="Linear Regression (ElasticNet)",
             config=config
@@ -87,31 +80,25 @@ class LinearRegressionModel(BaseModel):
             'alpha': [0.01, 0.1, 1.0, 10.0],  # Regularization strength
             'l1_ratio': [0.1, 0.5, 0.7, 0.9, 1.0] # 1.0 = Lasso, 0.0 ~ Ridge. 
         }
+        self.preprocessor: Optional[ColumnTransformer] = None
+        self.best_estimator: Optional[Pipeline] = None
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
-        """
-        Constructs and applies the feature pipeline optimized for Linear Regression.
-        
-        Rationale:
-        ----------
-        - **Normality Assumption**: Linear models assume residuals are normally distributed. Transformations (Log/Box-Cox) help achieve this.
-        - **Scaling**: Essential for regularization (L1/L2) so that penalties are applied uniformly across features.
-        - **Dummy Trap**: One-Hot Encoding with `drop='first'` prevents perfect collinearity, which breaks the normal equation (though less critical with regularization).
+        """Constructs and applies the feature pipeline optimized for Linear Regression.
         
         Pipeline Steps:
-        1. Numerical: Median imputation. Transformations (Log, Box-Cox, Yeo-Johnson). 
-           Robust or Standard Scaling. Feature Selection.
-        2. Categorical: Most frequent imputation. One-Hot encoding (drop='first').
+        1. Numerical: Imputation -> Transformation -> Scaling -> Selection.
+        2. Categorical: Imputation -> One-Hot Encoding.
         
         Args:
-            X: Input features DataFrame.
-            y: Target Series.
+            X (pd.DataFrame): Input features DataFrame.
+            y (pd.Series): Target Series.
             
         Returns:
-            Tuple containing:
-            - Transformed feature array (np.ndarray)
-            - Transformed target array (np.ndarray)
-            - The fitted ColumnTransformer object
+            Tuple[np.ndarray, np.ndarray, ColumnTransformer]: 
+                - Transformed feature array.
+                - Transformed target array.
+                - The fitted ColumnTransformer object.
             
         Raises:
             ValueError: If target variable 'y' contains NaNs.
@@ -120,8 +107,8 @@ class LinearRegressionModel(BaseModel):
         logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
         
         # Edge Case: Check for NaNs in target y before proceeding
-        if y.isna().any():
-            logger.error(f"[{self.name}] Target variable contains {y.isna().sum()} NaN values")
+        if pd.isna(y).any():
+            logger.error(f"[{self.name}] Target variable contains {pd.isna(y).sum()} NaN values")
             raise ValueError("Target variable 'y' contains missing values (NaNs). Please handle missing targets before training.")
 
         # 1. Scaling Strategy
@@ -134,8 +121,7 @@ class LinearRegressionModel(BaseModel):
             logger.debug(f"[{self.name}] Using StandardScaler (zero mean, unit variance)")
 
         # 2. Numerical Pipeline
-        # Steps: Impute -> Transform (Log/Power) -> Scale -> Select
-        num_steps = [
+        num_steps: List[Tuple[str, Any]] = [
             ('imputer', get_imputer(strategy='median'))
         ]
 
@@ -167,21 +153,11 @@ class LinearRegressionModel(BaseModel):
         logger.debug(f"[{self.name}] Numerical pipeline: {len(num_steps)} steps")
 
         # 3. Categorical Pipeline
-        # Steps: Impute -> OneHot (drop='first')
-        cat_steps = [
-            ('imputer', get_imputer(strategy='most_frequent')), # Use most_frequent for cats if needed, though median is spec'd for nums
-            ('onehot', get_one_hot_encoder(handle_unknown='ignore', sparse_output=False)) # drop='first' needs to be set manually if strict about dummy trap
-        ]
-        # Note: get_one_hot_encoder factory defaults to handle_unknown='ignore' (safer for prod). 
-        # Using OneHotEncoder in pipeline with drop='first' and handle_unknown='ignore' can be conflict prone in older sklearn,
-        # but modern versions handle it. If STRICT adherence to 'drop=first' is needed:
-        # We'd need to modify the factory or override here. The factory call is compatible.
-        
-        # To strictly satisfy "drop='first' to avoid dummy variable trap":
-        # We manually construct OneHot because the factory function in preprocessing.py might not expose drop param (let's check).
-        # Checking preprocessing.py... it takes handle_unknown and sparse_output. It doesn't take 'drop'.
-        # So we import OneHotEncoder class directly or modify the factory? 
-        # I'll instantiate OneHotEncoder directly here to meet the strict requirement.
+        # Import local OneHotEncoder for strict drop='first' compliance if needed, 
+        # or use the factory if it supports it. Factory handles unknown='ignore'.
+        # Here we prioritize robustness over strict dummy trap avoidance for production safety,
+        # but since this is Linear Regression, drop='first' is statistically preferred.
+        # We'll use manual construction for specificity here.
         from sklearn.preprocessing import OneHotEncoder
         cat_pipeline = Pipeline(steps=[
             ('imputer', get_imputer(strategy='most_frequent')),
@@ -200,34 +176,36 @@ class LinearRegressionModel(BaseModel):
 
         self.preprocessor = preprocessor
         
-        # We still return the fitted version for back-compat or initial extraction, 
-        # but the fit() method will use a fresh clone.
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
         y_transformed = y.values if hasattr(y, 'values') else np.asarray(y)
 
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
-        """
-        Trains the Linear Regression model using a Unified Pipeline to prevent data leakage.
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray) -> None:
+        """Trains the Linear Regression model using a Unified Pipeline.
+        
+        Incorporates GridSearchCV for hyperparameter optimization within the pipeline
+        to prevent data leakage during preprocessing.
+
+        Args:
+            X_train (pd.DataFrame): Training features.
+            y_train (np.ndarray): Training targets.
         """
         logger.info(f"[{self.name}] Starting training...")
         logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        from sklearn.model_selection import GridSearchCV
-        from sklearn.base import clone
+        if self.preprocessor is None:
+             raise RuntimeError("Preprocessor not initialized. Call preprocess() before fit().")
 
         # 1. Pipeline Construction
-        # We wrap the unfitted preprocessor and model in one object
         preprocessor_template = clone(self.preprocessor)
         pipe = Pipeline(steps=[
             ('pre', preprocessor_template),
             ('model', self.model_instance)
         ])
 
-        # 2. Adjust Param Grid
-        # GridSearchCV needs parameter names prefixed with the step name (e.g., 'model__alpha')
+        # 2. Adjust Param Grid for Pipeline
         pipeline_param_grid = {f'model__{k}': v for k, v in self.param_grid.items()}
 
         # 3. K-Fold Cross Validation
@@ -238,7 +216,6 @@ class LinearRegressionModel(BaseModel):
         )
 
         # 4. GridSearch on THE PIPELINE
-        # This ensures preprocessing is re-fit in every CV fold (Zero Leakage)
         grid_search = GridSearchCV(
             estimator=pipe,
             param_grid=pipeline_param_grid,
@@ -251,7 +228,9 @@ class LinearRegressionModel(BaseModel):
         grid_search.fit(X_train, y_train)
         
         self.best_estimator = grid_search.best_estimator_
-        self.model = grid_search # Store the tuner for parameter access
+        # Store the grid_search object in self.model for parameter access if needed, 
+        # though strictly self.model in base was generic.
+        self.model = grid_search 
         
         best_score = grid_search.best_score_
         best_params = grid_search.best_params_
@@ -260,10 +239,18 @@ class LinearRegressionModel(BaseModel):
         logger.debug(f"[{self.name}] Best params: {best_params}")
 
     def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
+        """Calculates regression performance metrics.
+        
+        Args:
+            X_test (pd.DataFrame): Test features.
+            y_test (np.ndarray): Test targets.
+
+        Returns:
+            Dict[str, float]: RMSE, MAE, R2, Adjusted R2.
         """
-        Calculates standard regression performance metrics using the full Pipeline.
-        """
-        # The pipeline handles raw X_test (pre -> model)
+        if self.best_estimator is None:
+             raise RuntimeError("Model must be fitted before calculating metrics.")
+
         y_pred = self.best_estimator.predict(X_test)
         
         metrics = {}
@@ -272,18 +259,24 @@ class LinearRegressionModel(BaseModel):
         metrics['R2 Score'] = calculate_r2_score(y_test, y_pred)
         
         # Access the processed data shape for adjusted R2
-        # We can transform temporarily to get the feature count
         n_samples = X_test.shape[0]
+        # Transform strictly to get feature count
         n_features = self.best_estimator.named_steps['pre'].transform(X_test).shape[1]
         metrics['Adjusted R2'] = calculate_adjusted_r2(y_test, y_pred, n_samples, n_features)
         
         return metrics
 
     def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
+        """Retrieves diagnostic data for visualization.
+        
+        Args:
+            X_test (pd.DataFrame): Test features.
+            y_test (np.ndarray): Test targets.
+
+        Returns:
+            Dict[str, Any]: Predictions, actuals, coefficients, and model name.
         """
-        Retrieves diagnostic data for visualization using the Pipeline.
-        """
-        if not hasattr(self, 'best_estimator'):
+        if self.best_estimator is None:
              raise RuntimeError("Model must be fitted before diagnostics.")
              
         y_pred = self.best_estimator.predict(X_test)
@@ -297,29 +290,35 @@ class LinearRegressionModel(BaseModel):
         }
 
     def get_feature_importance(self) -> Dict[str, Any]:
+        """Retrieves feature importance based on model coefficients.
+        
+        Returns:
+            Dict[str, Any]: Dictionary containing list of importances (coefficients).
         """
-        Retrieves feature importance based on model coefficients.
-        """
+        if self.best_estimator is None:
+            return {}
+            
         final_model = self.best_estimator.named_steps['model']
         if hasattr(final_model, 'coef_'):
             return {'importances': final_model.coef_.tolist()}
         return {}
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """Returns descriptions of the most important tuned parameters.
+        
+        Returns:
+            Dict[str, Dict[str, str]]: Parameter descriptions.
         """
-        Returns descriptions of the most important tuned parameters.
-        """
-        # Access best params from GridSearch results
-        best_params = self.model.best_params_
-        descriptions = {
-            'alpha': {
-                'value': str(best_params.get('model__alpha')),
-                'desc': 'Regularization strength. Higher values increase the penalty for complex models, helping to prevent overfitting.'
-            },
-            'l1_ratio': {
-                'value': str(best_params.get('model__l1_ratio')),
-                'desc': 'The balance between L1 (Lasso) and L2 (Ridge) regularization. 1.0 is full Lasso, 0.0 is full Ridge.'
+        if hasattr(self.model, 'best_params_'):
+            best_params = self.model.best_params_
+            return {
+                'alpha': {
+                    'value': str(best_params.get('model__alpha')),
+                    'desc': 'Regularization strength. Higher values increase the penalty for complex models.'
+                },
+                'l1_ratio': {
+                    'value': str(best_params.get('model__l1_ratio')),
+                    'desc': 'Balance between L1 (Lasso) and L2 (Ridge) regularization.'
+                }
             }
-        }
-        return descriptions
-
+        return {}

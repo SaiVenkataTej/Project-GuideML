@@ -23,10 +23,28 @@ This project demonstrates proficiency in advanced software and ML engineering co
 * `core_recommender/`: Main package source code.
 * `interface/`: Web application interface.
 * `scripts/`: Utility scripts and demos (e.g., `demo_run.py`).
-* `docs/`: Project documentation, changelogs, and techniques.
+* `docs/`: Project documentation.
+    * `USER_GUIDE.md`: For new users.
+    * `ML_THEORY.md`: For understanding the ML concepts.
+    * `FRONTEND_GUIDE.md`: For understanding the Web UI.
+    * `CODEBASE_WALKTHROUGH.md`: For developers.
+    * `WORKFLOWS.md`: For architects.
+    * `API_REFERENCE.md`: For API details.
 * `logs/`: Execution and error logs.
 * `data/`: Datasets.
 * `tests/`: Unit tests.
+
+## 📚 Documentation Index
+
+We have created detailed guides for every type of user:
+
+*   **[User Guide](docs/USER_GUIDE.md)**: 🚀 Start here! How to install and run the app.
+*   **[ML Theory](docs/ML_THEORY.md)**: 🧠 A "Senior Engineer's" explanation of the machine learning models used.
+*   **[Frontend Guide](docs/FRONTEND_GUIDE.md)**: 🎨 How the HTML, CSS, and JS work together.
+*   **[Codebase Walkthrough](docs/CODEBASE_WALKTHROUGH.md)**: 🏗️ A map of the project architecture and data flow.
+*   **[Workflows](docs/WORKFLOWS.md)**: ⚙️ Deep dive into logic, pipelines, and edge cases.
+*   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications for all 31 project files.
+*   **[Team Roles](docs/TEAM_ROLES.md)**: 🏢 The hypothetical "Dream Team" needed to scale this project.
 
 ---
 

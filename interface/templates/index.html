@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Model Recommender - AI Pipeline</title>
+    <title>GuideML - AI Pipeline</title>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Bootstrap 5 CSS -->
@@ -14,109 +14,177 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 
-<body class="bg-gradient-primary">
+<body>
 
-    <div class="container d-flex align-items-center justify-content-center min-vh-100">
-        <div class="card glass-card shadow-lg p-5" style="max-width: 600px; width: 100%;">
-            <div class="text-center mb-5">
-                <div class="icon-box mb-3">
-                    <i class="fas fa-robot fa-3x text-primary"></i>
-                </div>
-                <h1 class="fw-bold text-gradient">AI Model Recommender</h1>
-                <p class="text-muted">Upload your dataset to automatically find the best ML model.</p>
+    <div class="container d-flex align-items-center justify-content-center min-vh-100 py-5">
+        <!-- Flash Messages -->
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show shadow-lg glass-card text-white border-0"
+                role="alert">
+                <i class="fas fa-info-circle me-2"></i> {{ message }}
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"
+                    aria-label="Close"></button>
             </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+        </div>
 
-            <form id="uploadForm">
-                <!-- File Upload -->
-                <div class="mb-4">
-                    <label for="csvFile" class="form-label fw-semibold">1. Upload CSV Dataset</label>
-                    <div class="file-drop-area" id="dropArea">
-                        <i class="fas fa-cloud-upload-alt fa-2x mb-2 text-muted"></i>
-                        <span class="file-message">Drag & Drop or Click to Upload</span>
-                        <input class="file-input" type="file" id="csvFile" accept=".csv" required>
+        <div class="row w-100 justify-content-center align-items-center">
+
+            <!-- Hero Text -->
+            <div class="col-lg-7 text-white mb-5 mb-lg-0 fade-in-up">
+                <span
+                    class="badge bg-white bg-opacity-10 border border-white border-opacity-25 rounded-pill px-3 py-2 mb-4 text-uppercase tracking-wider">
+                    <i class="fas fa-sparkles text-warning me-2"></i> Next-Gen AutoML
+                </span>
+                <h1 class="display-3 fw-bold mb-3 tracking-tight">
+                    Intelligent <span class="text-gradient">Model Selection</span><br>
+                    Made Effortless.
+                </h1>
+                <p class="lead opacity-75 mb-5 pe-lg-5" style="max-width: 600px;">
+                    Upload your dataset and let our advanced engine automatically profile, train, and deploy the optimal
+                    machine learning model for your specific needs.
+                </p>
+
+                <div class="row g-4 opacity-90">
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="icon-square bg-primary bg-opacity-25 rounded-circle p-2 me-3 text-primary">
+                                <i class="fas fa-bolt fa-lg"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold">Instant Profiling</h6>
+                                <small class="text-muted">Deep data analysis</small>
+                            </div>
+                        </div>
                     </div>
-                    <div id="fileNameDisplay" class="mt-2 text-success small fw-bold"></div>
-                </div>
-
-                <!-- Target Column Selection (Hidden initially) -->
-                <div class="mb-4 d-none" id="targetSection">
-                    <label for="targetColumn" class="form-label fw-semibold">2. Select Target Variable (y)</label>
-                    <select class="form-select mb-4" id="targetColumn" name="target_column" required>
-                        <option value="" selected disabled>Choose the column to predict...</option>
-                    </select>
-
-                    <label class="form-label fw-semibold">3. Choose Models to Train</label>
-                    <div class="model-grid p-3 rounded" style="background: rgba(0,0,0,0.05);">
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="KNN"
-                                        id="chkKNN" checked>
-                                    <label class="form-check-label small" for="chkKNN">KNN</label>
-                                </div>
+                    <div class="col-auto">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="icon-square bg-success bg-opacity-25 rounded-circle p-2 me-3 text-success">
+                                <i class="fas fa-brain fa-lg"></i>
                             </div>
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="Random Forest"
-                                        id="chkRF" checked>
-                                    <label class="form-check-label small" for="chkRF">Random Forest</label>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="SVM"
-                                        id="chkSVM" checked>
-                                    <label class="form-check-label small" for="chkSVM">SVM</label>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="Decision Tree"
-                                        id="chkDT" checked>
-                                    <label class="form-check-label small" for="chkDT">Decision Trees</label>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="Linear Regression, Logistic Regression"
-                                        id="chkReg" checked>
-                                    <label class="form-check-label small" for="chkReg">Linear/Logistic</label>
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="models" value="Naive Bayes"
-                                        id="chkNB" checked>
-                                    <label class="form-check-label small" for="chkNB">Naive Bayes</label>
-                                </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold">Smart AutoML</h6>
+                                <small class="text-muted">Best model selection</small>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Action Button -->
-                <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-pill shadow-sm hover-elevate"
-                    id="submitBtn">
-                    <i class="fas fa-rocket me-2"></i> Launch Pipeline
-                </button>
-            </form>
+            <!-- Upload Card -->
+            <div class="col-lg-5 col-xl-4 fade-in-up delay-100">
+                <div class="glass-card p-4 p-md-5">
+                    <div class="text-center mb-4">
+                        <h4 class="fw-bold text-white">Start Analysis</h4>
+                        <p class="text-muted small">Configure your pipeline below</p>
+                    </div>
+
+                    <form id="uploadForm" action="/process" method="POST" enctype="multipart/form-data">
+                        <!-- File Upload -->
+                        <div class="mb-4">
+                            <label class="form-label small text-uppercase text-muted fw-bold mb-2">1. Upload
+                                Datset</label>
+                            <div class="file-drop-area" id="dropArea">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                                <span class="fw-bold text-white">Drag & Drop CSV</span>
+                                <span class="small text-muted mt-1">or click to browse</span>
+                                <input class="file-input" type="file" id="csvFile" name="file" accept=".csv" required>
+                            </div>
+                            <div id="fileNameDisplay"
+                                class="mt-2 text-primary small fw-semibold text-center fade-in-up d-none"></div>
+                        </div>
+
+                        <!-- Target Column Selection (Hidden initially) -->
+                        <div class="d-none" id="targetSection">
+                            <label for="targetColumn" class="form-label small text-uppercase text-muted fw-bold mb-2">2.
+                                Target Variable</label>
+                            <select class="form-select mb-4 py-3 bg-dark text-white border-secondary shadow-sm"
+                                id="targetColumn" name="target_column" required
+                                style="border-color: rgba(255,255,255,0.1);">
+                                <option value="" selected disabled>Select column to predict...</option>
+                            </select>
+
+                            <label class="form-label small text-uppercase text-muted fw-bold mb-2">3. Model
+                                Candidates</label>
+                            <div class="row g-2 mb-4">
+                                <div class="col-6">
+                                    <label class="model-card-label h-100">
+                                        <input type="checkbox" name="models" value="Random Forest"
+                                            class="model-card-input d-none" checked>
+                                        <div class="card h-100 p-3 text-center rounded-3">
+                                            <i class="fas fa-tree mb-2 opacity-50"></i>
+                                            <small class="fw-bold d-block">Random Forest</small>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="col-6">
+                                    <label class="model-card-label h-100">
+                                        <input type="checkbox" name="models" value="SVM" class="model-card-input d-none"
+                                            checked>
+                                        <div class="card h-100 p-3 text-center rounded-3">
+                                            <i class="fas fa-vector-square mb-2 opacity-50"></i>
+                                            <small class="fw-bold d-block">SVM Support</small>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="col-6">
+                                    <label class="model-card-label h-100">
+                                        <input type="checkbox" name="models"
+                                            value="Linear Regression, Logistic Regression"
+                                            class="model-card-input d-none" checked>
+                                        <div class="card h-100 p-3 text-center rounded-3">
+                                            <i class="fas fa-chart-line mb-2 opacity-50"></i>
+                                            <small class="fw-bold d-block">Linear / Log</small>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="col-6">
+                                    <label class="model-card-label h-100">
+                                        <input type="checkbox" name="models" value="XGBoost"
+                                            class="model-card-input d-none" checked>
+                                        <div class="card h-100 p-3 text-center rounded-3">
+                                            <i class="fas fa-rocket mb-2 opacity-50"></i>
+                                            <small class="fw-bold d-block">XGBoost</small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <button type="submit" class="btn btn-primary w-100 py-3 rounded-3 shadow-lg text-uppercase"
+                            id="submitBtn">
+                            Launch Pipeline <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Loading Overlay -->
+    <!-- Enhanced Loading Overlay -->
     <div id="loadingOverlay" class="d-none">
-        <div class="text-center text-white">
-            <div class="spinner-border text-light mb-4" style="width: 4rem; height: 4rem;" role="status"></div>
-            <h2 class="fw-bold mb-3">Training AI Models</h2>
+        <div class="text-center p-5" style="max-width: 500px; width: 90%;">
+            <div class="spinner-border text-primary mb-4" style="width: 4rem; height: 4rem; border-width: 3px;"
+                role="status"></div>
+            <h2 class="fw-bold text-white mb-2">Training Models</h2>
+            <p class="text-muted mb-4">Please wait while we crunch the numbers...</p>
 
-            <div class="progress mb-3 mx-auto"
-                style="height: 10px; max-width: 400px; background: rgba(255,255,255,0.2);">
-                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                    role="progressbar" style="width: 0%"></div>
+            <div id="storyContainer" class="text-start">
+                <!-- JS will populate pseudo-logs here -->
+                <div class="story-item fade-in-up">
+                    <span class="story-icon text-success"><i class="fas fa-check"></i></span>
+                    <div>
+                        <div class="story-time">00:00</div>
+                        <div class="story-text text-white">Pipeline initialized. Uploading data...</div>
+                    </div>
+                </div>
             </div>
-
-            <p id="statusMessage" class="lead opacity-75 mb-1">Preparing datasets...</p>
-            <p class="small opacity-50">This runs concurrently on all available CPU cores.</p>
         </div>
     </div>
 

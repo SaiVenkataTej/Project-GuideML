@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const form = document.getElementById('uploadForm');
     const loadingOverlay = document.getElementById('loadingOverlay');
+    const storyContainer = document.getElementById('storyContainer');
 
     // Drag & Drop Visuals
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -48,14 +49,20 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleFiles(files) {
         if (files.length > 0) {
             const file = files[0];
-            fileNameDisplay.textContent = `Selected: ${file.name}`;
             
-            // Read headers for dropdown
-            if (file.name.endsWith('.csv')) {
-                parseHeaders(file);
-            } else {
+            // Validate file type
+            if (!file.name.endsWith('.csv')) {
                 alert('Please upload a valid CSV file.');
+                return;
             }
+
+            // Update UI
+            fileNameDisplay.textContent = `Selected: ${file.name}`;
+            fileNameDisplay.classList.remove('d-none');
+            fileNameDisplay.classList.add('fade-in-up');
+            
+            // Parse headers
+            parseHeaders(file);
         }
     }
 
@@ -65,130 +72,102 @@ document.addEventListener('DOMContentLoaded', function() {
             const text = e.target.result;
             // Get first line
             const firstLine = text.split('\n')[0];
-            // Split by comma (handles basic CSV, not quotes/complex)
-            const headers = firstLine.split(',').map(h => h.trim().replace(/['"]+/g, ''));
+            
+            // Robust CSV parsing handles quoted commas
+            const headers = parseCSVLine(firstLine);
             
             // Populate Dropdown
-            targetSelect.innerHTML = '<option value="" selected disabled>Choose the column to predict...</option>';
+            targetSelect.innerHTML = '<option value="" selected disabled>Select column to predict...</option>';
             headers.forEach(header => {
-                if (header) {
+                if (header && header.trim() !== '') {
                     const option = document.createElement('option');
-                    option.value = header;
-                    option.textContent = header;
+                    option.value = header.trim();
+                    option.textContent = header.trim();
                     targetSelect.appendChild(option);
                 }
             });
 
-            // Show section
+            // Show section with animation
             targetSection.classList.remove('d-none');
+            targetSection.classList.add('fade-in-up');
         };
         // Read just the first 5kb to get headers
         reader.readAsText(file.slice(0, 5000));
     }
 
+    // Robust CSV Line Parser
+    function parseCSVLine(text) {
+        const result = [];
+        let cell = '';
+        let quote = false;
+
+        for (let i = 0; i < text.length; i++) {
+            let char = text[i];
+            
+            if (char === '"') {
+                quote = !quote;
+            } else if (char === ',' && !quote) {
+                result.push(cell.trim().replace(/^"|"$/g, '')); // Remove outer quotes
+                cell = '';
+            } else {
+                cell += char;
+            }
+        }
+        result.push(cell.trim().replace(/^"|"$/g, ''));
+        return result;
+    }
+
     // Handle Form Submit
     form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Show Loading
+        // Show loading overlay
         loadingOverlay.classList.remove('d-none');
+        startStory();
         
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        formData.append('target_column', targetSelect.value);
-        
-        // Collect selected models
-        const selectedModels = document.querySelectorAll('input[name="models"]:checked');
-        selectedModels.forEach(model => {
-            formData.append('models[]', model.value);
-        });
-        
-        const progressBar = document.getElementById('progressBar');
-        const statusMessage = document.getElementById('statusMessage');
-
-        fetch('/process', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'queued') {
-                const jobId = data.job_id;
-                pollStatus(jobId);
-            } else {
-                alert('Error: ' + data.error);
-                loadingOverlay.classList.add('d-none');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An unexpected error occurred. Check console.');
-            loadingOverlay.classList.add('d-none');
-        });
-
-        function pollStatus(jobId) {
-            const interval = setInterval(() => {
-                fetch(`/status/${jobId}`)
-                .then(res => res.json())
-                .then(status => {
-                    if (status.status === 'completed') {
-                        clearInterval(interval);
-                        // Final update to story
-                        updateStory(status.history);
-                        setTimeout(() => {
-                            window.location.href = status.redirect;
-                        }, 1000); // Small delay to see success
-                    } else if (status.status === 'failed') {
-                        clearInterval(interval);
-                        updateStory(status.history);
-                        alert('Training Failed: ' + status.error);
-                        loadingOverlay.classList.add('d-none');
-                    } else {
-                        // Update Progress UI
-                        progressBar.style.width = status.progress + '%';
-                        statusMessage.textContent = status.message;
-                        if (status.history) {
-                            updateStory(status.history);
-                        }
-                    }
-                })
-                .catch(err => {
-                    clearInterval(interval);
-                    console.error('Polling error:', err);
-                });
-            }, 1000); // Poll every second
-        }
-
-        function updateStory(history) {
-            const storyContainer = document.getElementById('storyContainer');
-            if (!history || !storyContainer) return;
-
-            storyContainer.innerHTML = ''; // Clear current (or optimized: only append new)
-            
-            history.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'story-item';
-                
-                // Color based on type
-                let colorClass = 'text-white';
-                if (item.type === 'success') colorClass = 'text-success';
-                if (item.type === 'danger') colorClass = 'text-danger';
-                if (item.type === 'warning') colorClass = 'text-warning';
-
-                div.innerHTML = `
-                    <div class="story-icon ${colorClass}">
-                        <i class="${item.icon}"></i>
-                    </div>
-                    <div class="story-content text-white">
-                        <div class="story-time">${item.timestamp}</div>
-                        <div class="story-text">${item.message}</div>
-                    </div>
-                `;
-                storyContainer.appendChild(div);
-            });
-
-            // Auto-scroll to bottom
-            storyContainer.scrollTop = storyContainer.scrollHeight;
-        }
+        // Let form submit naturally -> Flask processes -> Redirects
     });
+
+    // "Story" Animation
+    function startStory() {
+        const stories = [
+            "Validating dataset structure...",
+            "Detecting feature types...",
+            "Imputing missing values...",
+            "Scaling numerical features...",
+            "Encoding categorical variables...",
+            "Training Random Forest...",
+            "Training SVM...",
+            "Training Gradient Boosting...",
+            "Evaluating model performance...",
+            "Generating feature importance...",
+            "Calculating ROC curves...",
+            "Finalizing report..."
+        ];
+
+        let index = 0;
+        const storyInterval = setInterval(() => {
+            if (index < stories.length) {
+                addStoryItem(stories[index]);
+                index++;
+            } else {
+                clearInterval(storyInterval);
+            }
+        }, 1500); // New message every 1.5 seconds
+    }
+
+    function addStoryItem(text) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        
+        const item = document.createElement('div');
+        item.className = 'story-item fade-in-up';
+        item.innerHTML = `
+            <span class="story-icon text-success"><i class="fas fa-check"></i></span>
+            <div>
+                <div class="story-time text-white-50">${timeString}</div>
+                <div class="story-text text-white">${text}</div>
+            </div>
+        `;
+        
+        storyContainer.prepend(item); // Add to top
+    }
 });

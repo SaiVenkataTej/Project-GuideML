@@ -1,17 +1,16 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
 
-# --- SKLEARN IMPORTS ---
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.preprocessing import LabelEncoder
+from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
-from core_recommender.dataHandling import apply_label_encoder_target
 from core_recommender.preprocessing import (
     get_imputer, 
     get_one_hot_encoder, 
@@ -28,12 +27,16 @@ from core_recommender.evaluation import (
     measure_prediction_latency
 )
 
+# Import centralized logger
+from core_recommender.logger import get_logger
+logger = get_logger(__name__)
+
 # --- DEFAULT CONFIGURATION ---
 CONFIG = {
     'scaler': 'standard',
     'feature_selection': 'rfe',  # 'rfe', 'model_based', 'none'
     'n_features_to_select': 10,  # For RFE
-    'cv_folds': 5,
+    'cv_folds': 3,
     'random_state': 42,
     'n_jobs': -1
 }
@@ -43,34 +46,28 @@ CONFIG = {
 # =========================================================================
 
 class LogisticRegressionModel(BaseModel):
-    """
-    A concrete implementation of Logistic Regression for Classification tasks.
+    """A concrete implementation of Logistic Regression for Classification tasks.
     
-    Rationale:
-    ----------
-    - **Probabilistic Output**: Directly models the probability of class membership using the sigmoid function.
-    - **Robustness**: Regularization (L1/L2) handles high-dimensional data effectively.
-    - **Class Imbalance**: The `class_weight='balanced'` parameter automatically adjusts weights inversely proportional to class frequencies, crucial for rare event detection.
-
-    This model supports various regularization penalties (L1, L2, ElasticNet) to handle high-dimensional 
-    data and prevent overfitting.
+    Attributes:
+        model_instance (LogisticRegression): The underlying Scikit-learn estimator.
+        param_grid (Dict[str, List[Any]]): Hyperparameter grid for tuning.
+        preprocessor (ColumnTransformer): The feature engineering pipeline.
+        best_estimator (Pipeline): The fitted pipeline after tuning.
+        label_encoder (LabelEncoder): Encoder for target variable.
     """
-    def __init__(self, config: Dict[str, Any] = CONFIG):
-        """
-        Initializes the Logistic Regression model with configurable hyperparameters.
+    def __init__(self, config: Dict[str, Any] = CONFIG) -> None:
+        """Initializes the Logistic Regression model.
 
         Args:
-            config: Dictionary containing hyperparameters (e.g., 'C', 'penalty', 'solver').
-                    Defaults to the global CONFIG dictionary.
+            config (Dict[str, Any], optional): Dictionary containing hyperparameters. 
+                Defaults to the global CONFIG dictionary.
         """
-        
         super().__init__(
             name="Logistic Regression",
             config=config
         )
         
         # Initialize the base estimator with class_weight='balanced'
-        # to automatically handle imbalanced datasets (common in recommendation).
         self.model_instance = LogisticRegression(
             class_weight='balanced', 
             max_iter=1000, 
@@ -84,53 +81,42 @@ class LogisticRegressionModel(BaseModel):
             'solver': ['saga'], # 'saga' supports all penalties including elasticnet
             'l1_ratio': [0.5] # Only used if penalty='elasticnet'
         }
+        self.preprocessor: Optional[ColumnTransformer] = None
+        self.best_estimator: Optional[Pipeline] = None
+        self.label_encoder: Optional[LabelEncoder] = None
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
-        """
-        Constructs and applies the feature pipeline optimized for Logistic Regression.
+        """Constructs and applies the feature pipeline optimized for Logistic Regression.
         
-        Rationale:
-        ----------
-        - **Scaling**: Mandatory. Gradient descent converges much faster on scaled data, and regularization assumes uniform scale.
-        - **RFE (Recursive Feature Elimination)**: Iteratively removes weakest features to build a smaller, more robust model.
-
         Pipeline Steps:
-        1. Numerical: Median imputation. Standard Scaling. Feature Selection (RFE or Model-Based).
-        2. Categorical: Most frequent imputation. One-Hot encoding.
+        1. Numerical: Median imputation -> Standard Scaling -> Feature Selection.
+        2. Categorical: Most frequent imputation -> One-Hot Encoding.
         
         Args:
-            X: Input features DataFrame.
-            y: Target Series.
+            X (pd.DataFrame): Input features.
+            y (pd.Series): Target variable.
             
         Returns:
-            Tuple containing:
-            - Transformed feature array (np.ndarray)
-            - Transformed target array (np.ndarray)
-            - The fitted ColumnTransformer object
+            Tuple[np.ndarray, np.ndarray, ColumnTransformer]: Transformed X, y, and fitted preprocessor.
             
         Raises:
             ValueError: If target variable 'y' contains NaNs.
         """
-        
         logger.debug(f"[{self.name}] Entering preprocess()...")
         logger.debug(f"[{self.name}] Input shape: X={X.shape}, y={y.shape}")
         
-        # Check for NaNs in target y
         if y.isna().any():
             logger.error(f"[{self.name}] Target variable contains {y.isna().sum()} NaN values")
             raise ValueError("Target variable 'y' contains missing values (NaNs).")
 
         # 1. Numerical Pipeline
-        num_steps = [
+        num_steps: List[Tuple[str, Any]] = [
             ('imputer', get_imputer(strategy='median')),
             ('scaler', get_standard_scaler())
         ]
         
         # Feature Selection Logic
         fs_strategy = self.config.get('feature_selection')
-        
-        # Note: RFE and SelectFromModel need an estimator passed to them.
-        # We generally use a simple lightweight estimator for selection (e.g., simple LogReg or Tree)
         selection_estimator = LogisticRegression(max_iter=500, random_state=self.config.get('random_state'))
         
         if fs_strategy == 'rfe':
@@ -138,20 +124,19 @@ class LogisticRegressionModel(BaseModel):
                 estimator=selection_estimator, 
                 n_features_to_select=self.config.get('n_features_to_select', 10)
             )))
-            logger.debug(f"[{self.name}] Using RFE feature selection (n_features={self.config.get('n_features_to_select', 10)})")
+            logger.debug(f"[{self.name}] Using RFE feature selection")
         elif fs_strategy == 'model_based':
             num_steps.append(('select_from_model', get_select_from_model(
                 estimator=selection_estimator,
                 threshold='median'
             )))
-            logger.debug(f"[{self.name}] Using model-based feature selection (threshold=median)")
+            logger.debug(f"[{self.name}] Using model-based feature selection")
 
         numerical_pipeline = Pipeline(steps=num_steps)
 
         # 2. Categorical Pipeline
         cat_pipeline = Pipeline(steps=[
-            ('imputer', get_imputer(strategy='most_frequent')), # Mode strategy
-            # handle_unknown='ignore'
+            ('imputer', get_imputer(strategy='most_frequent')), 
             ('onehot', get_one_hot_encoder(handle_unknown='ignore', sparse_output=False))
         ])
 
@@ -171,7 +156,7 @@ class LogisticRegressionModel(BaseModel):
         X_transformed = preprocessor.fit_transform(X, y)
         X_transformed = np.asarray(X_transformed)
         
-        # 5. Encode Target y (Skip if already numeric/pre-encoded by Executor)
+        # 5. Encode Target y
         if not np.issubdtype(y.dtype, np.number):
             le = LabelEncoder()
             y_transformed = le.fit_transform(y)
@@ -180,20 +165,22 @@ class LogisticRegressionModel(BaseModel):
         else:
             y_transformed = y.values
             self.label_encoder = None
-            logger.debug(f"[{self.name}] Target variable is already numeric, skipping encoding.")
+            logger.debug(f"[{self.name}] Target variable is already numeric.")
 
-        logger.debug(f"[{self.name}] Preprocessing complete. Transformed X shape: {X_transformed.shape}")
         return X_transformed, y_transformed, preprocessor
 
-    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray):
-        """
-        Trains the Logistic Regression model using a Unified Pipeline to prevent data leakage.
+    def fit(self, X_train: pd.DataFrame, y_train: np.ndarray) -> None:
+        """Trains the Logistic Regression model using a Unified Pipeline.
+        
+        Args:
+            X_train (pd.DataFrame): Training features.
+            y_train (np.ndarray): Training targets.
         """
         logger.info(f"[{self.name}] Starting training...")
         logger.debug(f"[{self.name}] Training data shape: X={X_train.shape}, y={y_train.shape}")
         
-        from sklearn.model_selection import StratifiedKFold, GridSearchCV
-        from sklearn.base import clone
+        if self.preprocessor is None:
+             raise RuntimeError("Preprocessor not initialized.")
 
         # 1. Pipeline Construction
         preprocessor_template = clone(self.preprocessor)
@@ -201,11 +188,9 @@ class LogisticRegressionModel(BaseModel):
             ('pre', preprocessor_template),
             ('model', self.model_instance)
         ])
-        logger.debug(f"[{self.name}] Pipeline constructed with preprocessor and model instance.")
 
         # 2. Adjust Param Grid
         pipeline_params = {f'model__{k}': v for k, v in self.param_grid.items()}
-        logger.debug(f"[{self.name}] Parameter grid for GridSearchCV: {pipeline_params}")
 
         # 3. CV Strategy
         cv_strategy = StratifiedKFold(
@@ -213,9 +198,8 @@ class LogisticRegressionModel(BaseModel):
             shuffle=True, 
             random_state=self.config.get('random_state', 42)
         )
-        logger.debug(f"[{self.name}] Using StratifiedKFold with {self.config.get('cv_folds', 5)} folds.")
 
-        # 4. GridSearch on Pipeline
+        # 4. GridSearch
         grid_search = GridSearchCV(
             estimator=pipe,
             param_grid=pipeline_params,
@@ -224,23 +208,27 @@ class LogisticRegressionModel(BaseModel):
             n_jobs=self.config.get('n_jobs', -1),
             verbose=0
         )
-        logger.debug(f"[{self.name}] Starting GridSearchCV...")
 
         grid_search.fit(X_train, y_train)
         
         self.best_estimator = grid_search.best_estimator_
         self.model = grid_search
         
-        best_score = grid_search.best_score_
-        best_params = grid_search.best_params_
-        logger.info(f"✅ [{self.name}] Training complete")
-        logger.info(f"[{self.name}] Best CV Score: {best_score:.4f} (F1-weighted)")
-        logger.debug(f"[{self.name}] Best params: {best_params}")
+        logger.info(f"✅ [{self.name}] Training complete. Best CV Score: {grid_search.best_score_:.4f}")
 
     def calculate_metrics(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, float]:
+        """Calculates performance metrics.
+        
+        Args:
+            X_test (pd.DataFrame): Test features.
+            y_test (np.ndarray): Test targets.
+
+        Returns:
+            Dict[str, float]: Accuracy, F1, ROC AUC, Log Loss, Precision, Recall, Latency.
         """
-        Calculates performance metrics using the full Pipeline.
-        """
+        if self.best_estimator is None:
+             raise RuntimeError("Model must be fitted before calculating metrics.")
+
         y_pred = self.best_estimator.predict(X_test)
         y_proba = self.best_estimator.predict_proba(X_test)
         
@@ -254,16 +242,21 @@ class LogisticRegressionModel(BaseModel):
         metrics['Precision'] = prec
         metrics['Recall'] = rec
         
-        # Latency
         metrics['Prediction Latency (s)'] = measure_prediction_latency(self.best_estimator, X_test)
 
         return metrics
 
     def get_diagnostic_data(self, X_test: pd.DataFrame, y_test: np.ndarray) -> Dict[str, Any]:
+        """Retrieves diagnostic data for visualization.
+        
+        Args:
+            X_test (pd.DataFrame): Test features.
+            y_test (np.ndarray): Test targets.
+
+        Returns:
+            Dict[str, Any]: Predictions, probabilities, coefficients, etc.
         """
-        Retrieves diagnostic data for visualization using the Pipeline.
-        """
-        if not hasattr(self, 'best_estimator'):
+        if self.best_estimator is None:
              raise RuntimeError("Model must be fitted before diagnostics.")
              
         y_pred = self.best_estimator.predict(X_test)
@@ -283,30 +276,30 @@ class LogisticRegressionModel(BaseModel):
             'is_odds_ratio': True
         }
 
-    def get_feature_importance(self) -> Dict[str, float]:
-        """
-        Retrieves feature importance based on model coefficients.
-        """
+    def get_feature_importance(self) -> Dict[str, Any]:
+        """Retrieves feature importance based on model coefficients."""
+        if self.best_estimator is None:
+            return {}
+            
         final_model = self.best_estimator.named_steps['model']
         if hasattr(final_model, 'coef_'):
             coefs = final_model.coef_
             if coefs.ndim > 1: coefs = coefs[0]
             return {'importances': coefs.tolist()}
         return {}
+    
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
-        """
-        Returns descriptions of the most important tuned parameters.
-        """
-        # Access best params from GridSearch results
-        best_params = self.model.best_params_
-        descriptions = {
-            'C': {
-                'value': f"{best_params.get('model__C'):.4f}",
-                'desc': 'Inverse regularization strength. Smaller values specify stronger regularization, helping to prevent overfitting.'
-            },
-            'penalty': {
-                'value': str(best_params.get('model__penalty')),
-                'desc': 'The type of regularization applied (L1, L2, or ElasticNet) to penalize complex models.'
+        """Returns descriptions of the most important tuned parameters."""
+        if hasattr(self.model, 'best_params_'):
+            best_params = self.model.best_params_
+            return {
+                'C': {
+                    'value': f"{best_params.get('model__C'):.4f}",
+                    'desc': 'Inverse regularization strength. Smaller values specify stronger regularization.'
+                },
+                'penalty': {
+                    'value': str(best_params.get('model__penalty')),
+                    'desc': 'The type of regularization applied (L1, L2, or ElasticNet).'
+                }
             }
-        }
-        return descriptions
+        return {}

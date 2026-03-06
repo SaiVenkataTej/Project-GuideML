@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from joblib import dump
 import numpy as np
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Import centralized logger
 from core_recommender.logger import get_logger
@@ -14,76 +14,64 @@ logger = get_logger(__name__)
 # =========================================================================
 
 class BaseModel(ABC):
-    """
-    Abstract Base Class (ABC) is used for defining the standardized interface 
-    for all Machine Learning models in the GuideML recommender pipeline. 
+    """Abstract Base Class (ABC) defining the standardized interface for all ML models.
+
+    Ensures modularity and consistent usage by concurrency orchestrators.
+    Models must implement `fit` and `calculate_metrics`. 
     
-    This class enforces modularity and ensures that concurrency orchestrators 
-    (Joblib) can treat all model objects uniformly. Each model must implement
-    key methods like `fit`, `preprocess`, and `calculate_metrics`.
+    Attributes:
+        name (str): Unique identifier for the model.
+        config (Dict[str, Any]): Configuration parameters (hyperparameters).
+        model (Any): Placeholder for the Scikit-learn model instance.
+        metrics (Dict[str, float]): Dictionary storing performance metrics.
     """
     
-    def __init__(self, name: str, config: Dict[str, Any]):
-        """
-        Initializes the base model, storing its name and configuration.
+    def __init__(self, name: str, config: Dict[str, Any]) -> None:
+        """Initializes the base model with a name and configuration.
 
         Args:
-            name: A unique identifier for the model (e.g., 'RandomForest').
-            config: A dictionary containing configuration parameters (hyperparameters, etc.).
+            name (str): A unique identifier for the model.
+            config (Dict[str, Any]): A dictionary containing configuration parameters.
         """
         self.name = name
         self.config = config
-        self.model = None  # Placeholder for the Scikit-learn model instance
-        self.metrics = {}  # Dictionary to store performance metrics (F8)
+        self.model: Any = None
+        self.metrics: Dict[str, float] = {}
 
     # ---------------------------------------------------------------------
-    # ABSTRACT METHODS (Must be implemented by every concrete model inheriting
-    # the baseModel class)
+    # ABSTRACT METHODS
     # ---------------------------------------------------------------------
 
     @abstractmethod
-    def preprocess(self, data: pd.DataFrame) -> np.ndarray:
-        """
-        Prepares the data specifically for this model.
-
-        Used for feature engineering, scaling, encoding, handling missing 
-        values, etc.
-
-        This method will call imported, granular functions from the 
-        preprocessing.py module (F5).
+    def preprocess(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> Any:
+        """Prepares the data specifically for this model.
         
         Args:
-            data: The raw or partially processed DataFrame.
-            
+            X (pd.DataFrame): Training features.
+            y (Optional[pd.Series]): Training targets (optional).
+
         Returns:
-            np.ndarray: The final feature array ready for the model.
+            Any: Transformed features (and targets if applicable), and the fitted preprocessor.
         """
-        pass # Concrete models must define this logic
+        pass 
 
     @abstractmethod
-    def fit(self, X_train: np.ndarray, y_train: np.ndarray):
-        """
-        Trains the specific Scikit-learn model instance.
-        
-        This method must incorporate logic for k-fold cross-validation (F6)
-        and hyperparameter tuning if applicable.
+    def fit(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
+        """Trains the specific Scikit-learn model instance.
         
         Args:
-            X_train: Training features array.
-            y_train: Training target array.
+            X_train (np.ndarray): Training features array.
+            y_train (np.ndarray): Training target array.
         """
-        pass # Concrete models must define this logic
+        pass 
 
     @abstractmethod
     def calculate_metrics(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, float]:
-        """
-        Calculates and returns a dictionary of performance metrics (F8).
-        
-        This method must call imported, granular functions from evaluation.py.
+        """Calculates and returns a dictionary of performance metrics.
 
         Args:
-            X_test: Test features array.
-            y_test: Test target array.
+            X_test (np.ndarray): Test features array.
+            y_test (np.ndarray): Test target array.
             
         Returns:
             Dict[str, float]: Key-value pairs of metric names and their scores.
@@ -92,38 +80,35 @@ class BaseModel(ABC):
 
     @abstractmethod
     def get_diagnostic_data(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
-        """
-        Retrieves the necessary data (predictions, probabilities) for generating 
-        visualization plots (ROC, Confusion Matrix) (F9, F10).
+        """Retrieves data for generating visualization plots.
 
         Args:
-            X_test: Test features array.
-            y_test: Test target array.
+            X_test (np.ndarray): Test features array.
+            y_test (np.ndarray): Test target array.
 
         Returns:
-            Dict[str, Any]: Diagnositic data required by `visualization.py`.
+            Dict[str, Any]: Diagnostic data (predictions, probabilities, etc.).
         """
         pass
 
     @abstractmethod
-    def get_feature_importance(self) -> Dict[str, float]:
-        """
-        Retrieves the feature importance scores from the model, if supported (F9).
+    def get_feature_importance(self) -> Dict[str, Any]:
+        """Retrieves the feature importance scores from the model.
 
         Returns:
-            Dict[str, float]: Map of feature names to importance scores.
+            Dict[str, Any]: Map of feature names to importance scores.
         """
         pass
+    
     # ---------------------------------------------------------------------
-    # CONCRETE METHOD (Reusable by all models)
+    # CONCRETE METHOD
     # ---------------------------------------------------------------------
 
-    def export(self, filepath: str):
-        """
-        Serializes and exports the trained model artifact using joblib (F11).
+    def export(self, filepath: str) -> None:
+        """Serializes and exports the trained model artifact using joblib.
         
         Args:
-            filepath: The full path and filename for the exported model.
+            filepath (str): The full path and filename for the exported model.
         
         Raises:
             ValueError: If the model has not been trained yet.
