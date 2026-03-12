@@ -270,7 +270,7 @@ class LogisticRegressionModel(BaseModel):
         return {
             'y_pred': y_pred,
             'y_proba': y_proba,
-            'y_test': y_test,
+            'y_true': y_test,
             'coefficients': coefs,
             'model_name': self.name,
             'is_odds_ratio': True
@@ -289,17 +289,27 @@ class LogisticRegressionModel(BaseModel):
         return {}
     
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
-        """Returns descriptions of the most important tuned parameters."""
-        if hasattr(self.model, 'best_params_'):
+        """
+        Extracts and describes the final tuned hyperparameters of the Logistic Regression.
+        
+        This method retrieves the 'best_params_' from the GridSearchCV results,
+        providing transparency into the model's regularization and penalty strategy
+        within the dashboard UI.
+        
+        Returns:
+            Dict[str, Dict[str, str]]: A dictionary mapping parameter names to their 
+            values and technical descriptions.
+        """
+        if self.model and hasattr(self.model, 'best_params_'):
             best_params = self.model.best_params_
             return {
                 'C': {
-                    'value': f"{best_params.get('model__C'):.4f}",
-                    'desc': 'Inverse regularization strength. Smaller values specify stronger regularization.'
+                    'value': f"{best_params.get('model__C', 1.0):.4f}", 
+                    'desc': 'Inverse of regularization strength. Smaller values specify stronger regularization, penalizing complexity.'
                 },
                 'penalty': {
-                    'value': str(best_params.get('model__penalty')),
-                    'desc': 'The type of regularization applied (L1, L2, or ElasticNet).'
+                    'value': str(best_params.get('model__penalty')), 
+                    'desc': 'The regularization method used to prevent overfitting (e.g., L1 for sparsity, L2 for shrinkage).'
                 }
             }
         return {}

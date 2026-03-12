@@ -1,5 +1,11 @@
 import os
 import sys
+
+# Windows Fix: Set joblib temp folder to a stable local path to avoid FileNotFoundError during multiprocessing
+JOBLIB_TEMP = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tmp', 'joblib'))
+os.makedirs(JOBLIB_TEMP, exist_ok=True)
+os.environ['JOBLIB_TEMP_FOLDER'] = JOBLIB_TEMP
+
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, flash
@@ -14,7 +20,7 @@ from core_recommender.knowledge_base import MODEL_KNOWLEDGE
 from core_recommender.visualization import (
     plot_correlation_heatmap, plot_feature_histograms, plot_roc_curve,
     plot_confusion_matrix, plot_feature_importance, plot_coefficient_bar_chart,
-    plot_predicted_vs_actual, plot_residual_plot
+    plot_predicted_vs_actual, plot_residual_plot, plot_shap_summary
 )
 
 app = Flask(__name__)
@@ -23,6 +29,9 @@ app.secret_key = 'supersecretkey_dev_only' # Required for flash messages
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 app.config['IMAGE_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'images')
 app.config['MODEL_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'models')
+ 
+# Global to store the latest results for the dashboard
+LAST_RESULTS = None
 
 # --- Routes ---
 
@@ -90,9 +99,13 @@ def process():
         # Clean old images
         for f in os.listdir(app.config['IMAGE_FOLDER']):
             if f.endswith('.png'):
+                file_path = os.path.join(app.config['IMAGE_FOLDER'], f)
                 try:
-                    os.remove(os.path.join(app.config['IMAGE_FOLDER'], f))
-                except:
+                    # Windows robustness: check if exists and try to delete
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    print(f"DEBUG: Could not remove {f}: {e}")
                     pass
         
         heatmap_path = os.path.join(app.config['IMAGE_FOLDER'], 'heatmap.png')
@@ -110,10 +123,13 @@ def process():
         
         # 8. Generate diagnostic plots
         task_type = results['task_type']
+        # 8. Diagnostics Data
         best_model_data = results['best_model']
         diagnostics = best_model_data['diagnostics']
         
-        # Classification plots
+        # Note: Safety aliasing removed; all models now standardized to 'y_true'
+        
+        # 9. Plotting logic
         if task_type == 'classification':
             if 'y_proba' in diagnostics and diagnostics['y_proba'] is not None:
                 roc_path = os.path.join(app.config['IMAGE_FOLDER'], 'roc_curve.png')
@@ -126,9 +142,16 @@ def process():
             
             if 'y_pred' in diagnostics:
                 cm_path = os.path.join(app.config['IMAGE_FOLDER'], 'confusion_matrix.png')
+                
+                # Get classes from results or derive from y_true
+                classes = results.get('classes')
+                if classes is None:
+                    classes = np.unique(diagnostics['y_true']).astype(str)
+                    
                 plot_confusion_matrix(
                     np.asarray(diagnostics['y_true']),
                     np.asarray(diagnostics['y_pred']),
+                    np.asarray(classes),
                     best_model_data['name'],
                     save_path=cm_path
                 )
@@ -174,7 +197,8 @@ def process():
         
         # 9. Save best model
         model_path = os.path.join(app.config['MODEL_FOLDER'], 'best_model.pkl')
-        joblib.dump(executor.best_model_instance, model_path)
+        if executor.best_model_instance:
+            executor.best_model_instance.export(model_path)
         
         # 10. Store results globally
         LAST_RESULTS = results
@@ -184,7 +208,15 @@ def process():
     
     except Exception as e:
         import traceback
-        traceback.print_exc()
+        error_msg = traceback.format_exc()
+        print(f"ERROR in /process:\n{error_msg}")
+        # Try to use project logger if possible
+        try:
+            from core_recommender.logger import get_logger
+            logger = get_logger(__name__)
+            logger.error(f"AutoML Pipeline failed: {str(e)}\n{error_msg}")
+        except:
+            pass
         flash(f'An unexpected error occurred: {str(e)}', 'danger')
         return redirect('/')
 
@@ -206,25 +238,51 @@ def dashboard():
     else:
         primary_metric_key = 'RMSE'
     
+    # Get best score
+    best_score = results['best_model']['metrics'].get(primary_metric_key, 0.0)
+    
     # Get knowledge base entry
     best_model_name = results['best_model']['name']
-    knowledge = MODEL_KNOWLEDGE.get(best_model_name, {})
     
-    # Prepare template data
-    template_data = {
-        'task_type': task_type,
-        'best_model_name': best_model_name,
-        'best_metrics': results['best_model']['metrics'],
-        'leaderboard': leaderboard,
-        'primary_metric': primary_metric_key,
-        'hyperparameters': results['best_model'].get('explainability', {}).get('hyperparameters', {}),
-        'feature_importance': results['best_model'].get('feature_importance', {}),
-        'knowledge': knowledge,
-        'training_time': results.get('total_time', 0),
-        'pipeline_log': results['best_model'].get('explainability', {}).get('pipeline_steps', [])
+    # Simple mapping for knowledge base (stripping suffixes)
+    kb_key = best_model_name
+    for key in MODEL_KNOWLEDGE.keys():
+        if key.lower() in best_model_name.lower():
+            kb_key = key
+            break
+            
+    knowledge = MODEL_KNOWLEDGE.get(kb_key, {})
+    
+    # Construct formatted results object for the dashboard template.
+    # This architecture decoupling ensures the frontend only receives 
+    # the necessary visual data and high-level summaries.
+    formatted_results = {
+        'summary': {
+            'best_model': best_model_name,
+            'primary_metric': primary_metric_key,
+            'score': best_score,
+            'task': task_type.upper(),
+            'description': {
+                'story': knowledge.get('story', 'Model trained successfully.'),
+                'best_for': knowledge.get('best_for', 'General analysis')
+            }
+        },
+        'leaderboard': results.get('leaderboard', []),
+        'images': {
+            'diagnostics_1': 'roc_curve.png' if task_type == 'classification' else 'residuals.png',
+            'diagnostics_2': 'confusion_matrix.png' if task_type == 'classification' else 'predicted_vs_actual.png',
+            'importance': 'feature_importance.png' if os.path.exists(os.path.join(app.config['IMAGE_FOLDER'], 'feature_importance.png')) else None,
+            'shap': 'shap_summary.png' if os.path.exists(os.path.join(app.config['IMAGE_FOLDER'], 'shap_summary.png')) else None
+        },
+        'explainability': {
+            'parameters': results['best_model'].get('explainability', {}).get('parameters', {})
+        },
+        'best_model': {
+            'pipeline_log': results['best_model'].get('pipeline_log', [])
+        }
     }
     
-    return render_template('dashboard.html', **template_data)
+    return render_template('dashboard.html', results=formatted_results)
 
 @app.route('/download_model')
 def download_model():

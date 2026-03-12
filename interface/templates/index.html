@@ -4,193 +4,195 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GuideML - AI Pipeline</title>
-    <!-- Google Fonts -->
+    <title>GuideML | Elite AutoML Engine</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body>
 
-    <div class="container d-flex align-items-center justify-content-center min-vh-100 py-5">
-        <!-- Flash Messages -->
-        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show shadow-lg glass-card text-white border-0"
-                role="alert">
-                <i class="fas fa-info-circle me-2"></i> {{ message }}
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"
-                    aria-label="Close"></button>
+    <!-- Subtle Navigation -->
+    <nav class="navbar navbar-expand-lg nav-blur fixed-top">
+        <div class="container px-4">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <div class="icon-box bg-primary bg-opacity-10 me-3">
+                    <i class="fas fa-brain text-primary"></i>
+                </div>
+                <span class="fw-bold text-white ls-1">GUIDE<span class="text-primary">ML</span></span>
+            </a>
+            <div class="ms-auto d-none d-md-flex gap-4">
+                <a href="#" class="text-white-50 text-decoration-none small fw-medium hover-white transition">Documentation</a>
+                <a href="#" class="text-white-50 text-decoration-none small fw-medium hover-white transition">Engine v2.1</a>
             </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
         </div>
+    </nav>
 
-        <div class="row w-100 justify-content-center align-items-center">
-
-            <!-- Hero Text -->
-            <div class="col-lg-7 text-white mb-5 mb-lg-0 fade-in-up">
-                <span
-                    class="badge bg-white bg-opacity-10 border border-white border-opacity-25 rounded-pill px-3 py-2 mb-4 text-uppercase tracking-wider">
-                    <i class="fas fa-sparkles text-warning me-2"></i> Next-Gen AutoML
-                </span>
-                <h1 class="display-3 fw-bold mb-3 tracking-tight">
-                    Intelligent <span class="text-gradient">Model Selection</span><br>
-                    Made Effortless.
+    <main class="container min-vh-100 d-flex align-items-center py-5 pt-5mt-5">
+        <div class="row w-100 g-5 align-items-center">
+            
+            <!-- Hero Section -->
+            <div class="col-lg-7 fade-in-up">
+                <div class="mb-4">
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-20 px-3 py-2 rounded-pill x-small ls-wide text-uppercase">
+                        <i class="fas fa-sparkles me-2"></i> Automated Intelligence
+                    </span>
+                </div>
+                <h1 class="display-3 fw-bold mb-4">
+                    Architect Your <br>
+                    <span class="text-gradient">Data Destiny.</span>
                 </h1>
-                <p class="lead opacity-75 mb-5 pe-lg-5" style="max-width: 600px;">
-                    Upload your dataset and let our advanced engine automatically profile, train, and deploy the optimal
-                    machine learning model for your specific needs.
+                <p class="lead text-muted mb-5 pe-lg-5" style="max-width: 580px; font-weight: 300;">
+                    GuideML utilizes advanced heuristic profiling and hyperparameter optimization to transform raw data into high-performance predictive models. Built for precision. Engineered for speed.
                 </p>
 
-                <div class="row g-4 opacity-90">
-                    <div class="col-auto">
-                        <div class="d-flex align-items-center mb-2">
-                            <div class="icon-square bg-primary bg-opacity-25 rounded-circle p-2 me-3 text-primary">
-                                <i class="fas fa-bolt fa-lg"></i>
+                <div class="row g-4 mb-5">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-start">
+                            <div class="icon-box bg-white bg-opacity-05 me-3">
+                                <i class="fas fa-microchip text-accent-color"></i>
                             </div>
                             <div>
-                                <h6 class="mb-0 fw-bold">Instant Profiling</h6>
-                                <small class="text-muted">Deep data analysis</small>
+                                <h6 class="mb-1 fw-bold">Neural Profiling</h6>
+                                <p class="x-small text-muted mb-0">Deep structural entropy analysis across features.</p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-auto">
-                        <div class="d-flex align-items-center mb-2">
-                            <div class="icon-square bg-success bg-opacity-25 rounded-circle p-2 me-3 text-success">
-                                <i class="fas fa-brain fa-lg"></i>
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-start">
+                            <div class="icon-box bg-white bg-opacity-05 me-3">
+                                <i class="fas fa-layer-group text-primary"></i>
                             </div>
                             <div>
-                                <h6 class="mb-0 fw-bold">Smart AutoML</h6>
-                                <small class="text-muted">Best model selection</small>
+                                <h6 class="mb-1 fw-bold">Ensemble Selection</h6>
+                                <p class="x-small text-muted mb-0">Competitive benchmarking of state-of-the-art architectures.</p>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Trust Badges -->
+                <div class="d-flex align-items-center gap-4 opacity-50 grayscale">
+                    <i class="fab fa-python fa-2x"></i>
+                    <i class="fas fa-database fa-2x"></i>
+                    <span class="fw-bold ls-2">SCIKIT-LEARN</span>
+                </div>
             </div>
 
-            <!-- Upload Card -->
-            <div class="col-lg-5 col-xl-4 fade-in-up delay-100">
+            <!-- Configuration Terminal -->
+            <div class="col-lg-5 fade-in-up delay-100">
                 <div class="glass-card p-4 p-md-5">
-                    <div class="text-center mb-4">
-                        <h4 class="fw-bold text-white">Start Analysis</h4>
-                        <p class="text-muted small">Configure your pipeline below</p>
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h4 class="mb-1">Control Plane</h4>
+                            <p class="x-small text-muted mb-0 ls-1">CONFIGURE PIPELINE PARAMETERS</p>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <span class="rounded-circle bg-danger bg-opacity-50" style="width: 8px; height: 8px;"></span>
+                            <span class="rounded-circle bg-warning bg-opacity-50" style="width: 8px; height: 8px;"></span>
+                            <span class="rounded-circle bg-success bg-opacity-50" style="width: 8px; height: 8px;"></span>
+                        </div>
                     </div>
 
                     <form id="uploadForm" action="/process" method="POST" enctype="multipart/form-data">
-                        <!-- File Upload -->
+                        <!-- Step 1: Input -->
                         <div class="mb-4">
-                            <label class="form-label small text-uppercase text-muted fw-bold mb-2">1. Upload
-                                Datset</label>
+                            <div class="d-flex justify-content-between mb-2">
+                                <label class="x-small text-uppercase fw-bold ls-wide opacity-50">01. Source Data</label>
+                            </div>
                             <div class="file-drop-area" id="dropArea">
-                                <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
-                                <span class="fw-bold text-white">Drag & Drop CSV</span>
-                                <span class="small text-muted mt-1">or click to browse</span>
+                                <div class="mb-3">
+                                    <i class="fas fa-file-csv fa-3x opacity-20"></i>
+                                </div>
+                                <h6 class="mb-1">Inject CSV Stream</h6>
+                                <p class="x-small text-muted">Drop local file or tap to browse</p>
                                 <input class="file-input" type="file" id="csvFile" name="file" accept=".csv" required>
                             </div>
-                            <div id="fileNameDisplay"
-                                class="mt-2 text-primary small fw-semibold text-center fade-in-up d-none"></div>
+                            <div id="fileNameDisplay" class="mt-3 p-2 rounded bg-primary bg-opacity-05 border border-primary border-opacity-10 text-primary x-small fw-bold text-center d-none"></div>
                         </div>
 
-                        <!-- Target Column Selection (Hidden initially) -->
-                        <div class="d-none" id="targetSection">
-                            <label for="targetColumn" class="form-label small text-uppercase text-muted fw-bold mb-2">2.
-                                Target Variable</label>
-                            <select class="form-select mb-4 py-3 bg-dark text-white border-secondary shadow-sm"
-                                id="targetColumn" name="target_column" required
-                                style="border-color: rgba(255,255,255,0.1);">
-                                <option value="" selected disabled>Select column to predict...</option>
-                            </select>
+                        <!-- Step 2 & 3: Parameters (Hidden initially) -->
+                        <div id="targetSection" class="fade-in-up d-none">
+                            <div class="mb-4">
+                                <label class="x-small text-uppercase fw-bold ls-wide opacity-50 mb-2">02. Prediction Target</label>
+                                <select class="form-select bg-surface text-white border-white border-opacity-10 py-3 px-4 rounded-3 shadow-none" id="targetColumn" name="target_column" required>
+                                    <option value="" selected disabled>Select objective column...</option>
+                                </select>
+                            </div>
 
-                            <label class="form-label small text-uppercase text-muted fw-bold mb-2">3. Model
-                                Candidates</label>
-                            <div class="row g-2 mb-4">
-                                <div class="col-6">
-                                    <label class="model-card-label h-100">
-                                        <input type="checkbox" name="models" value="Random Forest"
-                                            class="model-card-input d-none" checked>
-                                        <div class="card h-100 p-3 text-center rounded-3">
-                                            <i class="fas fa-tree mb-2 opacity-50"></i>
-                                            <small class="fw-bold d-block">Random Forest</small>
+                            <div class="mb-4">
+                                <label class="x-small text-uppercase fw-bold ls-wide opacity-50 mb-3">03. Model Architectures</label>
+                                <div class="model-grid">
+                                    <label class="model-card-label">
+                                        <input type="checkbox" name="models" value="Random Forest" class="model-card-input d-none" checked>
+                                        <div class="model-card-content h-100">
+                                            <i class="fas fa-network-wired"></i>
+                                            <span class="d-block x-small fw-bold">RF Ensemble</span>
                                         </div>
                                     </label>
-                                </div>
-                                <div class="col-6">
-                                    <label class="model-card-label h-100">
-                                        <input type="checkbox" name="models" value="SVM" class="model-card-input d-none"
-                                            checked>
-                                        <div class="card h-100 p-3 text-center rounded-3">
-                                            <i class="fas fa-vector-square mb-2 opacity-50"></i>
-                                            <small class="fw-bold d-block">SVM Support</small>
+                                    <label class="model-card-label">
+                                        <input type="checkbox" name="models" value="SVM" class="model-card-input d-none" checked>
+                                        <div class="model-card-content h-100">
+                                            <i class="fas fa-vector-square"></i>
+                                            <span class="d-block x-small fw-bold">SVM Kernel</span>
                                         </div>
                                     </label>
-                                </div>
-                                <div class="col-6">
-                                    <label class="model-card-label h-100">
-                                        <input type="checkbox" name="models"
-                                            value="Linear Regression, Logistic Regression"
-                                            class="model-card-input d-none" checked>
-                                        <div class="card h-100 p-3 text-center rounded-3">
-                                            <i class="fas fa-chart-line mb-2 opacity-50"></i>
-                                            <small class="fw-bold d-block">Linear / Log</small>
+                                    <label class="model-card-label">
+                                        <input type="checkbox" name="models" value="Linear Regression, Logistic Regression" class="model-card-input d-none" checked>
+                                        <div class="model-card-content h-100">
+                                            <i class="fas fa-bezier-curve"></i>
+                                            <span class="d-block x-small fw-bold">General Linear</span>
                                         </div>
                                     </label>
-                                </div>
-                                <div class="col-6">
-                                    <label class="model-card-label h-100">
-                                        <input type="checkbox" name="models" value="XGBoost"
-                                            class="model-card-input d-none" checked>
-                                        <div class="card h-100 p-3 text-center rounded-3">
-                                            <i class="fas fa-rocket mb-2 opacity-50"></i>
-                                            <small class="fw-bold d-block">XGBoost</small>
+                                    <label class="model-card-label">
+                                        <input type="checkbox" name="models" value="KNN" class="model-card-input d-none" checked>
+                                        <div class="model-card-content h-100">
+                                            <i class="fas fa-users-viewfinder"></i>
+                                            <span class="d-block x-small fw-bold">KNN Proximity</span>
                                         </div>
                                     </label>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Action Button -->
-                        <button type="submit" class="btn btn-primary w-100 py-3 rounded-3 shadow-lg text-uppercase"
-                            id="submitBtn">
-                            Launch Pipeline <i class="fas fa-arrow-right ms-2"></i>
+                        <!-- Action -->
+                        <button type="submit" class="btn btn-primary w-100 mt-2" id="submitBtn">
+                            Initialize Engine <i class="fas fa-bolt-lightning ms-2"></i>
                         </button>
                     </form>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
-    <!-- Enhanced Loading Overlay -->
-    <div id="loadingOverlay" class="d-none">
-        <div class="text-center p-5" style="max-width: 500px; width: 90%;">
-            <div class="spinner-border text-primary mb-4" style="width: 4rem; height: 4rem; border-width: 3px;"
-                role="status"></div>
-            <h2 class="fw-bold text-white mb-2">Training Models</h2>
-            <p class="text-muted mb-4">Please wait while we crunch the numbers...</p>
+    <!-- Professional Loading Overlay -->
+    <div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(8, 9, 15, 0.98); z-index: 9999; backdrop-filter: blur(15px);">
+        <div class="text-center" style="max-width: 600px; width: 90%;">
+            <div class="mb-5">
+                <div class="spinner-border text-primary" style="width: 3.5rem; height: 3.5rem; border-width: 0.2rem;" role="status"></div>
+            </div>
+            <h3 class="fw-bold ls-1 mb-2">ORCHESTRATING PIPELINE</h3>
+            <p class="text-muted small mb-5">Executing heuristic analysis and model triangulation...</p>
 
-            <div id="storyContainer" class="text-start">
-                <!-- JS will populate pseudo-logs here -->
-                <div class="story-item fade-in-up">
-                    <span class="story-icon text-success"><i class="fas fa-check"></i></span>
-                    <div>
-                        <div class="story-time">00:00</div>
-                        <div class="story-text text-white">Pipeline initialized. Uploading data...</div>
-                    </div>
-                </div>
+            <div class="loading-table-container">
+                <table class="loading-table text-start">
+                    <thead>
+                        <tr>
+                            <th style="width: 70%;">PROCESS STEP</th>
+                            <th style="width: 30%;">STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="storyContainer">
+                        <!-- Table rows injected by script.js -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS + Custom JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 
-</html>
+</html>

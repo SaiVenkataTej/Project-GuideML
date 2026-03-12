@@ -199,6 +199,12 @@ class SVMModel(BaseModel):
         
         # 3. Build Best Model
         best_params = study.best_params
+        # Ensure we keep the fixed parameters that aren't tuned
+        if self.is_classification:
+            best_params['probability'] = True
+            best_params['class_weight'] = 'balanced'
+            best_params['random_state'] = self.config.get('random_state', 42)
+            
         best_model_inst = base_cls(**best_params)
         
         self.best_estimator = Pipeline(steps=[
@@ -284,7 +290,7 @@ class SVMModel(BaseModel):
         
         data = {
             'y_pred': y_pred,
-            'y_test': y_test,
+            'y_true': y_test,
             'model_name': self.name,
             'support_vectors': final_model.support_vectors_,
             'n_support': final_model.n_support_ if hasattr(final_model, 'n_support_') else None,
@@ -310,13 +316,31 @@ class SVMModel(BaseModel):
         return {}
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
-        """Returns descriptions of the most important tuned parameters."""
-        if hasattr(self.model, 'best_params_'):
-            # Optuna study based
+        """
+        Extracts and describes the final tuned hyperparameters of the SVM model.
+        
+        This method retrieves the 'best_params' from the completed Optuna study,
+        providing a human-readable bridge between technical parameters (Model DNA)
+        and the dashboard UI.
+        
+        Returns:
+            Dict[str, Dict[str, str]]: A dictionary mapping parameter names to their 
+            values and technical descriptions.
+        """
+        if hasattr(self, 'study') and self.study:
             best_params = self.study.best_params
             return {
-                'C': {'value': f"{best_params.get('C'):.4f}", 'desc': 'Regularization parameter.'},
-                'kernel': {'value': str(best_params.get('kernel')), 'desc': 'Kernel type.'},
-                'gamma': {'value': str(best_params.get('gamma')), 'desc': 'Kernel coefficient.'}
+                'C': {
+                    'value': f"{best_params.get('C', 0):.4f}", 
+                    'desc': 'Regularization strength (Inverse). Higher values prioritize training accuracy over margin width.'
+                },
+                'kernel': {
+                    'value': str(best_params.get('kernel')), 
+                    'desc': 'The mathematical function used to map input data into a high-dimensional feature space.'
+                },
+                'gamma': {
+                    'value': str(best_params.get('gamma')), 
+                    'desc': 'Kernel coefficient. Defines how far the influence of a single training example reaches.'
+                }
             }
         return {}

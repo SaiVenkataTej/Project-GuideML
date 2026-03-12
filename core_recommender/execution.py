@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import time
 import traceback
+import os
+import shap
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
-from joblib import Parallel, delayed
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import LabelEncoder
@@ -19,6 +20,7 @@ from core_recommender.modeling.decisionTrees import DecisionTreeModel
 from core_recommender.modeling.svms import SVMModel
 from core_recommender.modeling.naiveBayes import NaiveBayesModel
 from core_recommender.profiling import DataProfiler
+from .visualization import plot_shap_summary
 
 logger = get_logger(__name__)
 
@@ -158,13 +160,32 @@ class ModelExecutor:
                     if col1 not in leaky_features: leaky_features.append(col1)
                     if col2 not in leaky_features: leaky_features.append(col2)
 
+        # 3. Categorical/Object Leakage Check
+        # Check if any non-numeric column has suspiciously low entropy or mirrors the target
+        cat_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+        for col in cat_cols:
+            if col == target_column: continue
+            # If a column name contains "target", "label", "result" it's a high risk
+            if any(word in col.lower() for word in ['target', 'label', 'result', 'outcome', 'output']):
+                logger.warning(f"⚠️ High-risk column name detected: '{col}' looks like a target proxy.")
+                if col not in leaky_features: leaky_features.append(col)
+                continue
+                
+            # If unique values are identical to target (1:1 mapping)
+            if df[col].nunique() == df[target_column].nunique():
+                # Cross-tab check for perfect correlation
+                contingency = pd.crosstab(df[col], df[target_column])
+                if (contingency.values > 0).sum() == df[col].nunique():
+                    logger.warning(f"⚠️ Categorical Leakage: '{col}' has a perfect 1:1 mapping with the target.")
+                    if col not in leaky_features: leaky_features.append(col)
+
         if leaky_features:
             leaky_features = list(set(leaky_features))
             logger.warning(f"🚩 Dropping {len(leaky_features)} leaky features: {leaky_features}")
-            df_dropped = df.drop(columns=leaky_features)
-            return df_dropped
+            self._log_step("Leakage Check", f"Removed {len(leaky_features)} leaky features: {', '.join(leaky_features)}", "fas fa-shield-alt")
+            return df.drop(columns=leaky_features)
         else:
-            logger.info("✅ No obvious leakage detected based on numeric correlations")
+            logger.info("✅ No obvious leakage detected.")
             self._log_step("Values Check", "No data leakage detected. Features look healthy.", "fas fa-shield-alt")
             return df
 
@@ -245,7 +266,9 @@ class ModelExecutor:
             # Check if user string is substring of model name
             matched_by = None
             for inc in include_models:
-                if inc.lower() in model.name.lower():
+                # Handle comma-separated strings or multiple models in one checkbox value
+                possible_matches = [p.strip().lower() for p in inc.split(',')]
+                if any(p in model.name.lower() for p in possible_matches if p):
                     matched_by = inc
                     break
             
@@ -539,9 +562,32 @@ class ModelExecutor:
              if len(feature_names) == len(importance_data['importances']):
                 importance_data['feature_names'] = feature_names
         
+        # 12. Modular SHAP (Explainability Layer)
+        # This section generates global feature impact plots using SHAP values.
+        try:
+            # Deterministic path for the SHAP artifact to be consumed by the Flask frontend.
+            shap_path = os.path.join('interface', 'static', 'images', 'shap_summary.png')
+            
+            # Robustness: Ensure the directory structure exists (especially important for fresh clones).
+            if not os.path.exists(os.path.dirname(shap_path)):
+                os.makedirs(os.path.dirname(shap_path), exist_ok=True)
+                
+            # Convert test data back to a labeled DataFrame for better SHAP plot annotations.
+            X_test_df = pd.DataFrame(X_test, columns=feature_names)
+            
+            # Generate the visualization. 
+            # Note: We pass the underlying 'best_estimator' if it's wrapped in a Pipeline.
+            plot_shap_summary(self.best_model_instance.best_estimator, X_test_df, self.best_model_name, shap_path)
+            logger.info("✅ SHAP Summary Plot generated successfully.")
+        except Exception as e:
+            # SHAP is a value-added feature; we log the failure but do not halt the entire pipeline.
+            logger.warning(f"⚠️ SHAP generation skipped: {str(e)}")
+
+        # 13. Construct Comprehensive Final Result Summary
         summary = {
             'task_type': inferred_task,
             'total_time': time.time() - start_time,
+            'classes': list(self.label_encoder.classes_) if self.label_encoder else None,
             'leaderboard': [
                 {
                     'model': r['model_name'], 
@@ -555,9 +601,11 @@ class ModelExecutor:
                 'name': self.best_model_name,
                 'metrics': self.best_model_metrics,
                 'diagnostics': diagnostics,
+                'classes': list(self.label_encoder.classes_) if self.label_encoder else None,
                 'explainability': {
                     'importance': importance_data,
-                    'parameters': self.best_model_instance.get_parameter_descriptions()
+                    'parameters': self.best_model_instance.get_parameter_descriptions(),
+                    'has_shap': True  # Flag to trigger app.py plotting
                 },
                 'pipeline_log': self.pipeline_log
             }

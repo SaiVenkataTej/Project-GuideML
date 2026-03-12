@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import seaborn as sns
 import io
-from typing import List, Optional
+import os
+import shap
+from typing import List, Optional, Dict, Any
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 
 # --- Configuration ---
@@ -35,12 +37,26 @@ def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Op
         Figure: The Matplotlib Figure object containing the heatmap.
     """
     fig, ax = plt.subplots(figsize=(12, 10))
-    corr = df.corr(numeric_only=True)
+    
+    # Robustness Fix: If target_column is not numeric, temporarily encode it for the heatmap
+    plot_df = df.copy()
+    if target_column in df.columns and not pd.api.types.is_numeric_dtype(df[target_column]):
+        from sklearn.preprocessing import LabelEncoder
+        le = LabelEncoder()
+        plot_df[target_column] = le.fit_transform(df[target_column].astype(str))
+        logger.debug(f"Encoded non-numeric target '{target_column}' for heatmap calculation.")
+
+    corr = plot_df.corr(numeric_only=True)
     
     # Optional: Focus heatmap on target correlation for easier interpretation
-    k = 15  # Number of variables for heatmap
-    cols = corr.nlargest(k, target_column)[target_column].index
-    cm = np.corrcoef(df[cols].values.T)
+    k = min(15, len(corr.columns)) # Ensure k is within bounds
+    if target_column in corr.columns:
+        cols = corr.nlargest(k, target_column)[target_column].index
+        cm = np.corrcoef(plot_df[cols].values.T)
+    else:
+        # Fallback if target still not found or no numeric columns
+        cols = corr.columns[:k]
+        cm = corr.iloc[:k, :k].values
     
     sns.heatmap(cm, 
                 annot=True, 
@@ -49,8 +65,8 @@ def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Op
                 ax=ax, 
                 cmap='coolwarm',
                 cbar_kws={'label': 'Correlation Coefficient'},
-                yticklabels=cols.values.tolist(), 
-                xticklabels=cols.values.tolist())
+                yticklabels=cols.tolist(), 
+                xticklabels=cols.tolist())
     
     ax.set_title(f"Feature Correlation Heatmap (Top {k} correlated with '{target_column}')", fontsize=14)
     plt.tight_layout()
@@ -128,7 +144,22 @@ def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, sav
         Figure: The Matplotlib Figure object containing the ROC curve.
     """
     # Calculate ROC curve and AUC
-    fpr, tpr, thresholds = roc_curve(y_true, y_proba)
+    y_true = np.asarray(y_true)
+    y_proba = np.asarray(y_proba)
+    
+    # ROBUSTNESS FIX: Handle 2D probability arrays (N samples, N classes)
+    # roc_curve expects a 1D array of scores for the positive class.
+    if y_proba.ndim == 2:
+        if y_proba.shape[1] == 2:
+            # Binary case: take the second column (usually class 1)
+            y_score = y_proba[:, 1]
+        else:
+            # Multiclass case or something else: ravel or warn
+            y_score = y_proba[:, 1] if y_proba.shape[1] > 1 else y_proba.ravel()
+    else:
+        y_score = y_proba
+
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
     roc_auc = auc(fpr, tpr)
     
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -277,6 +308,52 @@ def plot_coefficient_bar_chart(feature_names: List[str], coefficients: np.ndarra
         fig.savefig(save_path)
         
     return fig
+
+def plot_shap_summary(model: Any, X: pd.DataFrame, model_name: str, save_path: str):
+    """
+    Generates a SHAP summary plot (bar) to show global feature impact.
+    
+    Args:
+        model: The fitted model (typically the 'best_estimator' from a search or pipeline).
+        X: The preprocessed feature matrix (DataFrame) for which to compute SHAP values.
+        model_name: Descriptive name of the model for the plot title.
+        save_path: Filesystem path to save the generated PNG.
+    """
+    plt.figure(figsize=(10, 6))
+    
+    try:
+        # Performance Guard: Sample data for speed if the dataset is large.
+        # SHAP calculation can be computationally expensive (especially Kernel/Permutation).
+        if len(X) > 200:
+            X_sample = X.sample(200, random_state=42)
+        else:
+            X_sample = X
+            
+        # Explainer Dispatch: Extract the inner model if buried in a scikit-learn Pipeline.
+        if hasattr(model, 'named_steps') and 'model' in model.named_steps:
+             actual_model = model.named_steps['model']
+        else:
+             actual_model = model
+
+        # Initialize SHAP Explainer - handles trees, linear models, and kernels automatically.
+        explainer = shap.Explainer(actual_model, X_sample)
+        shap_values = explainer(X_sample, check_additivity=False)
+        
+        # Render Global Feature Importance (Bar Plot Type).
+        # max_display is capped at 10 to maintain dashboard readability.
+        shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False, max_display=10)
+        
+        plt.title(f"SHAP Global Impact Analysis - {model_name}", fontsize=14, pad=20)
+        
+        # Ensure target directory exists before saving (Windows robustness).
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, bbox_inches='tight', dpi=100)
+    except Exception as e:
+        # Graceful failure: Render an error message on the plot artifact if SHAP fails.
+        plt.text(0.5, 0.5, f"SHAP Unavailable: {str(e)}", ha='center', va='center')
+        plt.savefig(save_path)
+    finally:
+        plt.close()
 
 # =========================================================================
 # 📈 Regression Diagnostics

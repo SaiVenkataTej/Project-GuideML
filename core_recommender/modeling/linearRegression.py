@@ -284,7 +284,7 @@ class LinearRegressionModel(BaseModel):
         
         return {
             'y_pred': y_pred,
-            'y_test': y_test,
+            'y_true': y_test,
             'coefficients': final_model.coef_ if hasattr(final_model, 'coef_') else None,
             'model_name': self.name
         }
@@ -304,21 +304,27 @@ class LinearRegressionModel(BaseModel):
         return {}
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
-        """Returns descriptions of the most important tuned parameters.
+        """
+        Extracts and describes the final tuned hyperparameters of the Linear Regression (ElasticNet).
+        
+        This method retrieves the 'best_params_' from the GridSearchCV object. It 
+        standardizes the output for the dashboard, clarifying the roles of Alpha
+        and L1_Ratio in the model's performance.
         
         Returns:
-            Dict[str, Dict[str, str]]: Parameter descriptions.
+            Dict[str, Dict[str, str]]: A dictionary mapping parameter names to their 
+            values and technical definitions.
         """
-        if hasattr(self.model, 'best_params_'):
+        if self.model and hasattr(self.model, 'best_params_'):
             best_params = self.model.best_params_
             return {
                 'alpha': {
-                    'value': str(best_params.get('model__alpha')),
-                    'desc': 'Regularization strength. Higher values increase the penalty for complex models.'
+                    'value': f"{best_params.get('model__alpha', 0.0):.4f}",
+                    'desc': 'The overall regularization strength. Controls the magnitude of the penalty applied to coefficients.'
                 },
                 'l1_ratio': {
-                    'value': str(best_params.get('model__l1_ratio')),
-                    'desc': 'Balance between L1 (Lasso) and L2 (Ridge) regularization.'
+                    'value': f"{best_params.get('model__l1_ratio', 0.0):.4f}",
+                    'desc': 'Mix between L1 (Lasso) and L2 (Ridge) penalties. 1.0 is full Lasso, 0.0 is full Ridge.'
                 }
             }
         return {}

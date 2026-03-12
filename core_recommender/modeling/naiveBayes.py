@@ -252,7 +252,7 @@ class NaiveBayesModel(BaseModel):
         return {
             'y_pred': y_pred,
             'y_proba': y_proba,
-            'y_test': y_test,
+            'y_true': y_test,
             'model_name': self.name,
             'feature_log_prob': getattr(final_model, 'feature_log_prob_', None)
         }

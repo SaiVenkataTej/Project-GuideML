@@ -317,7 +317,7 @@ class KNNModel(BaseModel):
         
         return {
             'y_pred': y_pred,
-            'y_test': y_test,
+            'y_true': y_test,
             'y_proba': y_proba,
             'model_name': self.name,
             'elbow_data': elbow_data,

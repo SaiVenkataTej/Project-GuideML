@@ -269,7 +269,8 @@ class DecisionTreeModel(BaseModel):
 
         return {
             'y_pred': y_pred,
-            'y_test': y_test,
+            'y_true': y_test,
+            'y_proba': self.best_estimator.predict_proba(X_test) if self.is_classification else None,
             'model_name': self.name,
             'feature_importances': self.get_feature_importance(),
             'tree_dot_data': dot_data
@@ -284,4 +285,15 @@ class DecisionTreeModel(BaseModel):
         if hasattr(final_tree, 'feature_importances_'):
              # Convert array to list for JSON serialization
             return {'importances': final_tree.feature_importances_.tolist()}
+        return {}
+
+    def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """Returns descriptions of the most important tuned parameters."""
+        if self.model and hasattr(self.model, 'best_params_'):
+            best_params = self.model.best_params_
+            return {
+                'max_depth': {'value': str(best_params.get('model__max_depth')), 'desc': 'Maximum depth of the tree.'},
+                'criterion': {'value': str(best_params.get('model__criterion')), 'desc': 'Function to measure split quality.'},
+                'min_samples_leaf': {'value': str(best_params.get('model__min_samples_leaf')), 'desc': 'Minimum samples required at a leaf node.'}
+            }
         return {}

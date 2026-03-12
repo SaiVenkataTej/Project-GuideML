@@ -325,7 +325,8 @@ class RandomForestModel(BaseModel):
 
         return {
             'y_pred': y_pred,
-            'y_test': y_test,
+            'y_true': y_test,
+            'y_proba': self.best_estimator.predict_proba(X_test) if self.is_classification else None,
             'model_name': self.name,
             'feature_importances_mdi': mdi_importance,
             'single_estimator': single_estimator,
@@ -343,16 +344,31 @@ class RandomForestModel(BaseModel):
         return {}
     
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
-        """Returns descriptions of the most important tuned parameters."""
-        if hasattr(self.model, 'best_params_'):
-            # This works if best_estimator is from GridSearchCV/RandomizedSearchCV
-            # But here we used Optuna and custom pipeline construction.
-            # We can use our 'best_params' from study if accessed, or inspect the final model.
-            final_model = self.best_estimator.named_steps['model']
-            params = final_model.get_params()
+        """
+        Extracts and describes the final tuned hyperparameters of the Random Forest.
+        
+        This method retrieves the 'best_params' from the completed Optuna study,
+        mapping the internal technical values to a structured dictionary for the 
+        dashboard's "Model DNA" section.
+        
+        Returns:
+            Dict[str, Dict[str, str]]: A dictionary mapping parameter names to their 
+            values and technical descriptions.
+        """
+        if hasattr(self, 'study') and self.study:
+            best_params = self.study.best_params
             return {
-                'n_estimators': {'value': str(params.get('n_estimators')), 'desc': 'Number of trees.'},
-                'max_depth': {'value': str(params.get('max_depth')), 'desc': 'Max depth of trees.'},
-                 'min_samples_split': {'value': str(params.get('min_samples_split')), 'desc': 'Min samples to split.'}
+                'n_estimators': {
+                    'value': str(best_params.get('n_estimators')), 
+                    'desc': 'The number of individual decision trees in the ensemble forest.'
+                },
+                'max_depth': {
+                    'value': str(best_params.get('max_depth')), 
+                    'desc': 'Maximum vertical depth allowed for each tree, controlling model complexity and overfitting.'
+                },
+                'min_samples_split': {
+                    'value': str(best_params.get('min_samples_split')), 
+                    'desc': 'The minimum number of data samples required to trigger a split in an internal node.'
+                }
             }
         return {}
