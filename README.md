@@ -12,17 +12,19 @@ The core strength of the application lies in its **Modular, Object-Oriented desi
 
 ## Technical Highlights (What You'll Find Inside)
 
-This project demonstrates proficiency in advanced software and ML engineering concepts:
+This project demonstrates proficiency in standard software and ML engineering concepts:
 
-* **Concurrency & Performance:** Uses **Joblib/Multiprocessing** to execute training of 10 models simultaneously and **Multithreading** to optimize data I/O.
-* **Architecture (OOP):** Implements a core package (`core_recommender/`) that is decoupled from the UI. All models inherit from a **`BaseModel` abstract class** with customizable `preprocess()` and `evaluate()` methods.
-* **Optimization:** Includes logic for **Bayesian Hyperparameter Optimization** (Optuna) applied to the top-performing models, providing superior tuning compared to traditional Grid Search.
-* **Diagnostics:** Generates crucial diagnostic visualizations for analysis.
+* **Architecture (OOP):** Implements a core package (`core_recommender/`) decoupled from the UI. All models inherit from a **`BaseModel` abstract class** with customizable `preprocess()` and `evaluate()` methods.
+* **Optimization:** Includes logic for **Bayesian Hyperparameter Optimization** (Optuna) with cross-validation.
+* **Intelligent Profiling:** Basic heuristic profiling to generate warnings for dataset dimensionality, sparsity, and linearity.
+* **Diagnostics:** Generates crucial diagnostic visualizations (SHAP, ROC, Residuals) using non-interactive Matplotlib backends.
+
+*Note: The current architecture utilizes sequential processing for model training and relies on synchronous Flask routing, meaning long training times will block the active browser session.*
 
 ## Directory Structure
 * `core_recommender/`: Main package source code.
 * `interface/`: Web application interface.
-* `scripts/`: Utility scripts and demos (e.g., `demo_run.py`).
+* `scripts/`: Utility scripts and demos.
 * `docs/`: Project documentation.
     * `USER_GUIDE.md`: For new users.
     * `ML_THEORY.md`: For understanding the ML concepts.
@@ -30,32 +32,32 @@ This project demonstrates proficiency in advanced software and ML engineering co
     * `CODEBASE_WALKTHROUGH.md`: For developers.
     * `WORKFLOWS.md`: For architects.
     * `API_REFERENCE.md`: For API details.
-* `logs/`: Execution and error logs.
+    * `TEAM_ROLES.md`: Team structure overview.
+* `logs/`: System logs.
 * `data/`: Datasets.
-* `tests/`: Unit tests.
+* `tests/`: Unit tests (Currently Empty - high priority for future implementation).
 
 ## 📚 Documentation Index
 
 We have created detailed guides for every type of user:
 
 *   **[User Guide](docs/USER_GUIDE.md)**: 🚀 Start here! How to install and run the app.
-*   **[ML Theory](docs/ML_THEORY.md)**: 🧠 A "Senior Engineer's" explanation of the machine learning models used.
+*   **[ML Theory](docs/ML_THEORY.md)**: 🧠 Explanation of the machine learning models used.
 *   **[Frontend Guide](docs/FRONTEND_GUIDE.md)**: 🎨 How the HTML, CSS, and JS work together.
-*   **[Codebase Walkthrough](docs/CODEBASE_WALKTHROUGH.md)**: 🏗️ A map of the project architecture and data flow.
+*   **[Codebase Walkthrough](docs/CODEBASE_WALKTHROUGH.md)**: 🏗️ A map of the actual project architecture and data flow.
 *   **[Workflows](docs/WORKFLOWS.md)**: ⚙️ Deep dive into logic, pipelines, and edge cases.
-*   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications for all 31 project files.
-*   **[Team Roles](docs/TEAM_ROLES.md)**: 🏢 The hypothetical "Dream Team" needed to scale this project.
+*   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications.
 
 ---
 
-## 🎯 Project Scope: What It Does (Product Functions)
+## 🎯 Project Scope: What It Actually Does
 
-The application provides a complete, automated pipeline:
+The application provides an automated, sequential pipeline:
 
-1. **Ingestion & Preprocessing:** Reads a CSV file, handles basic imputation/encoding, and performs a stratified train/test split.
-2. **Concurrent Training:** Trains a fixed suite of traditional ML models concurrently using **multiprocessing** and **k-fold cross-validation**.
-3. **Model Selection & Tuning:** Ranks all models and applies **Bayesian Hyperparameter Optimization** (Optuna) to the best performers.
-4. **Output & Export:** Displays a final ranked leaderboard and a comprehensive visualization suite. Facilitates the download of the best model artifact.
+1. **Ingestion & Preprocessing:** Reads a CSV file (blocking request), infers regression or classification task type, handles basic imputation/encoding, and performs a standard train/test split.
+2. **Sequential Model Training:** Trains a suite of traditional ML models iteratively using a standard loop and cross-validation score ranking.
+3. **Model Selection & Tuning:** Ranks all models and applies **Bayesian Hyperparameter Optimization** (Optuna) automatically.
+4. **Output & Export:** Displays a final ranked leaderboard and a visualization suite upon request completion. Facilitates the download of the best model artifact.
 
 ---
 

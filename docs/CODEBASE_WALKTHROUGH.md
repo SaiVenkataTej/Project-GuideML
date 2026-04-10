@@ -9,35 +9,34 @@ This guide is your map to the `GuideML` codebase.
 ---
 
 ## 1. The High-Level Architecture
-Our system follows a classic **Client-Server** model, but with a twist for heavy computation.
+Our system follows a straightforward, synchronous Web App model.
 
-1.  **The Client (Frontend)**: The browser/HTML. It's dumb. It just displays what it's told.
-2.  **The Server (Backend)**: The Flask app (`app.py`). It's the traffic cop. It handles requests but delegates heavy work.
-3.  **The Core Engine (`core_recommender/`)**: The heavy lifter. This is where the ML magic happens. It's completely separate from the web app.
+1.  **The Client (Frontend)**: The browser/HTML. It utilizes standard JS and Bootstrap to render the interface and masks loading times with UI overlays.
+2.  **The Server (Backend)**: The Flask app (`app.py`). It receives POST requests and routes them directly to the recommender engine.
+3.  **The Core Engine (`core_recommender/`)**: The heavy lifter. This is where the ML modeling and optimization algorithms reside.
 
-**Key Design Decision:** We use **Asynchronous Processing**.
-*   *Problem:* ML training takes time. If we run it in the main web request, the browser will timeout.
-*   *Solution:* We spawn a **Background Thread** to run the ML pipeline. The web server returns "Message Received!" immediately, and the client asks for updates every few seconds.
+**Key Design Reality:** We use **Synchronous Processing**.
+*   *How it works:* The user uploads a CSV, and the Flask application entirely blocks the thread to execute the ML pipeline from start to finish. Once the pipeline completes and global variables are populated, it triggers an HTTP redirect back to the client. This means long analyses will stall the browser request until complete.
 
 ---
 
 ## 2. Directory Structure: "Where does stuff live?"
 
 *   **`interface/`**: The face of the operation.
-    *   `app.py`: The Flask web server.
-    *   `templates/` & `static/`: HTML, CSS, JS.
+    *   `app.py`: The Flask web server. *Note: Data routing currently relies on a `global` variable (`LAST_RESULTS`), meaning concurrent users will overwrite each other.*
+    *   `templates/` & `static/`: HTML, CSS, JS. Hardcoded dataset uploads land in `static/uploads/`.
 *   **`core_recommender/`**: The brain.
-    *   `execution.py`: The **Manager**. It orchestrates the whole flow (Load -> Clean -> Train -> Rank).
-    *   `modeling/`: The **Workers**. Each file (`knn.py`, `randomForest.py`) defines one specific algorithm.
-    *   `preprocessing.py`: The **Janitor**. Cleans data before the workers see it.
-    *   `dataHandling.py`: The **Translator**. Handles feature encoding (One-Hot, Ordinal) to turn text into numbers.
-    *   `tuning.py`: The **Optimizer**. Uses Grid Search or Optuna to find the perfect settings for each model.
-    *   `evaluation.py`: The **Judge**. Calculates accuracy, RMSE, and F1 scores to see who really won.
-    *   `visualization.py`: The **Artist**. Turns cold numbers into beautiful charts and heatmaps.
-    *   `knowledge_base.py`: The **Storyteller**. Holds the simple definitions and "stories" for every model.
-    *   `logger.py`: The **Record Keeper**. Tracks every step and sends progress updates back to the UI.
-*   **`data/`**: Storage for uploaded CSVs.
-*   **`logs/`**: The black box recorder. If something crashes, look here.
+    *   `execution.py`: The **Manager**. It orchestrates the whole flow synchronously (Load -> Clean -> Train -> Rank) acting as a single large God-object.
+    *   `modeling/`: The **Workers**. Each file (`knn.py`, `randomForest.py`) inherits from `BaseModel`.
+    *   `preprocessing.py`: The **Transformers**. Sklearn wrappers for scaling, imputing, and encoding.
+    *   `dataHandling.py`: Additional data utilities.
+    *   `tuning.py`: The **Optimizer**. Uses Optuna to find the best settings via cross-validation.
+    *   `evaluation.py`: Calculates accuracy, RMSE, and F1 scores.
+    *   `visualization.py`: Generates the `.png` charts (ROC, Heatmaps).
+    *   `knowledge_base.py`: Holds descriptions and UI explanations for model types.
+    *   `logger.py`: Writes `.log` files to disk. *(Note: The UI progress handler functionality exists but is currently disconnected from the Flask app).*
+*   **`logs/`**: Raw text logs tracking execution and errors.
+*   **`tests/`**: Unit testing folder (currently empty).
 
 ---
 
@@ -46,48 +45,40 @@ Our system follows a classic **Client-Server** model, but with a twist for heavy
 Let's trace exactly what happens when a user uploads `data.csv`:
 
 ### Step 1: The Upload (Interface)
-*   **User** clicks "Upload" on `index.html`.
-*   **JS** captures the file and sends it to `/process` in `app.py`.
-*   **`app.py`** saves the file to `uploads/` and generates a unique `job_id` (e.g., `abc-123`).
-*   **`app.py`** starts a background thread calling `background_training()`.
-*   **Response:** "Job Started! ID: abc-123".
+*   **User** clicks "Initialize Engine" on `index.html`.
+*   **JS** pushes a loading spinner and sends a traditional `POST` to `/process` in `app.py`.
+*   **`app.py`** blindly overwrites whatever is currently in `uploads/dataset.csv`.
+*   **`app.py`** hands the data directly to `ModelExecutor.run()`, freezing the web request.
 
-### Step 2: The Handover & Prep (Execution & dataHandling)
-Now the background thread takes over.
-*   It calls `ModelExecutor.run()` in `core_recommender/execution.py`.
+### Step 2: The Handover & Prep (Execution)
 *   **Executor** reads the CSV.
-*   **Executor** calls `preprocessing.py` to fix missing values.
-*   **Executor** uses `dataHandling.py` to encode categorical columns so the models can read them.
+*   **Executor** heavily cleans data inline: stripping outliers, inferring task types, detecting target leakage based on absolute correlation, and encoding targets with `LabelEncoder`.
 
 ### Step 3: The Race & Optimization (Training & Tuning)
 *   The Executor creates instances of models (KNN, Random Forest, etc.) from `modeling/`.
-*   It calls `tuning.py` to run hyperparameter optimization (like Optuna). We don't just train; we hunt for the *best version* of each model.
-*   It uses `joblib` to train them **in parallel** (multiprocessing).
+*   It utilizes a **sequential Python `for` loop** to train each model one-by-one.
+*   Inside the sequence, it wraps the model with preprocessing steps and calls `tuning.py` to run Optuna Bayesian parameter optimization.
 
 ### Step 4: The Decision (Evaluation)
 *   Each model makes predictions on a test set.
-*   The Executor calls `evaluation.py` to calculate precision, recall, and error rates.
-*   The Executor compares these scores and picks the definitive winner.
-*   It saves the "Best Model" as a `.pkl` file.
-*   The Executor extracts the **"Model DNA"** (tuned parameters) from the winning estimator.
+*   The Executor calculates metrics and ranks models by F1 Score (Classification) or RMSE (Regression).
+*   It saves the "Best Model" estimator as `best_model.pkl`.
 
 ### Step 5: The Results (Visualization & Frontend)
-*   The Executor calls `visualization.py` to generate ROC curves, confusion matrices, and **SHAP Global Influence** plots.
-*   The JS on the frontend has been asking "Are you done?" every 2 seconds.
-+   `app.py` finally says "Yes!", providing links to the generated visualizations and model metrics.
-*   The browser redirects to `/dashboard`, which reads the results, the "stories" from `knowledge_base.py`, and renders the charts.
+*   The Executor calls `visualization.py` to save `roc_curve.png`, `shap_summary.png`, etc. as local files.
+*   The Executor bundles all numerical results and pushes them onto the global `LAST_RESULTS` dictionary.
+*   `app.py` releases the frozen POST request, issuing a redirect (`302`) to `/dashboard`.
+*   `/dashboard` reads the global dict, maps metrics to descriptions in `knowledge_base.py`, and renders the HTML page.
 
 ---
 
 ## 4. The Support System: "Behind the Scenes"
 
-We have two silent partners working throughout this entire process:
-
 ### 1. The Logger (`logger.py`)
-This isn't just for errors. Our logger has a special `ProgressLogHandler`. When the ML script is 40% done with training, it tells the Logger, which then tells the Flask app, which then tells the User's browser. It's how we keep the progress bar moving.
+Our `logger.py` handles writing errors and execution tracks to `logs/guideml.log`. While UI progress handler logic was drafted for this module, the web application currently ignores it across the synchronous Flask pipeline. 
 
-### 2. The Knowledge Base (`knowledge_base.py`)
-Users aren't always data scientists. When the dashboard says "Random Forest," the frontend pulls a "Story" from `knowledge_base.py` to explain it (e.g., *"Imagine a council of wise experts..."*). It bridges the gap between math and understanding.
+### 2. The UI Pipeline Log (`execution.py`)
+To mimic progress logs, the `execution.py` class manually appends text dicts like `{"step": "Splitting", "details": "..."}` to its internal list. This exact list simply gets printed on screen at the very end when the dashboard loads.
 
 ---
 
