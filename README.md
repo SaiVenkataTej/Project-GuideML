@@ -8,7 +8,7 @@ The goal is to provide users with easy access to evaluate basic ML models based 
 ## Purpose
 This project is a high-performance, single-session local application that automates the initial phases of the Machine Learning lifecycle. It is engineered with a focus on speed, architecture, and advanced diagnostics, serving as a powerful tool for quickly identifying the best-performing traditional ML model for a given dataset.
 
-The core strength of the application lies in its **Modular, Object-Oriented design** and its use of **multiprocessing/multithreading** to run training pipelines concurrently, drastically reducing model selection time.
+The core strength of the application lies in its **Modular, Object-Oriented design** and its use of **Bayesian Hyperparameter Optimization (Optuna)** to efficiently tune models — replacing the brute-force approach of GridSearchCV with intelligent search that finds optimal parameters in significantly less time.
 
 ## Technical Highlights (What You'll Find Inside)
 
@@ -33,6 +33,8 @@ This project demonstrates proficiency in standard software and ML engineering co
     * `WORKFLOWS.md`: For architects.
     * `API_REFERENCE.md`: For API details.
     * `TEAM_ROLES.md`: Team structure overview.
+    * `Techniques.md`: Full breakdown of techniques used per model.
+    * `UPDATE_LOG.md`: Changelog of documentation and architectural updates.
 * `logs/`: System logs.
 * `data/`: Datasets.
 * `tests/`: Unit tests (Currently Empty - high priority for future implementation).
@@ -43,10 +45,13 @@ We have created detailed guides for every type of user:
 
 *   **[User Guide](docs/USER_GUIDE.md)**: 🚀 Start here! How to install and run the app.
 *   **[ML Theory](docs/ML_THEORY.md)**: 🧠 Explanation of the machine learning models used.
+*   **[Techniques](docs/Techniques.md)**: 🔬 Full breakdown of every preprocessing, tuning, and evaluation technique used per model.
 *   **[Frontend Guide](docs/FRONTEND_GUIDE.md)**: 🎨 How the HTML, CSS, and JS work together.
 *   **[Codebase Walkthrough](docs/CODEBASE_WALKTHROUGH.md)**: 🏗️ A map of the actual project architecture and data flow.
 *   **[Workflows](docs/WORKFLOWS.md)**: ⚙️ Deep dive into logic, pipelines, and edge cases.
-*   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications.
+*   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications for every function and route.
+*   **[Team Roles](docs/TEAM_ROLES.md)**: 🏢 What a full enterprise team around this project would look like.
+*   **[Update Log](docs/UPDATE_LOG.md)**: 📝 Changelog of documentation and architectural updates.
 
 ---
 
@@ -77,12 +82,17 @@ To maintain a manageable scope and ensure timely completion, the following featu
 ### Prerequisites
 
 * Python 3.10+
-* The following libraries (as defined in `requirements.txt`): 
-* `scikit-learn` 
-* `pandas` 
-* `numpy`
-* `joblib`
-* `Flask/Bolt`
+* The following libraries (as defined in `requirements.txt`):
+  * `scikit-learn`
+  * `pandas`
+  * `numpy`
+  * `joblib >= 1.3.0`
+  * `flask`
+  * `optuna`
+  * `shap`
+  * `matplotlib`
+  * `seaborn`
+  * `scipy`
 
 ### Installation (Using Conda/venv)
 

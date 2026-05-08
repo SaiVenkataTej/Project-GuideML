@@ -13,14 +13,13 @@ This document is for the architects and senior developers who need to know exact
 1.  **Upload Request**: User POSTs a file to `/process`.
 2.  **Validation Layer 1 (File Type)**:
     *   Check extension: Must be `.csv`.
-    *   Check size: Must be < 50MB (Configurable).
-    *   **Edge Case:** User uploads an image named `data.csv`. *Action: Reject immediately.*
+    *   **Edge Case:** User uploads a non-CSV file. *Action: Flash error and redirect back to homepage.*
 3.  **Validation Layer 2 (Content)**:
     *   Pandas `read_csv()` attempts to parse.
-    *   **Edge Case:** CSV is malformed or empty. *Action: Catch `pd.errors.EmptyDataError`, return friendly error.*
+    *   **Edge Case:** CSV is malformed or empty. *Action: Caught by the outer `try/except` in `app.py`, flashes an error message to the user.*
 4.  **Target Column Check**:
-    *   Does the requested "Target" column exist?
-    *   **Edge Case:** Typo in target name. *Action: Return 400 Bad Request with available columns.*
+    *   Does the requested "Target" column exist in the DataFrame?
+    *   **Edge Case:** Typo in target name. *Action: Return 400 JSON error with message.*
 
 ---
 
@@ -46,29 +45,29 @@ This document is for the architects and senior developers who need to know exact
 ## 3. Training & Selection Strategy
 **Goal:** Find the best model efficiently.
 
-### The Parallel Execution (`core_recommender/execution.py`):
+### The Sequential Training Loop (`core_recommender/execution.py`):
 1.  **Task Inference**:
     *   Is the target a number (Regression) or a category (Classification)?
     *   **Edge Case:** Target is numeric (0, 1) but represents classes. *Action: Heuristic check (if unique values < 20 -> Classification).*
-2.  **Concurrency**:
-    *   We use `joblib.Parallel` with `n_jobs=-1` (Use all cores).
+2.  **Sequential Execution**:
+    *   Models are trained one-by-one using a standard Python `for` loop.
     *   **Edge Case:** One model crashes (e.g., SVM on non-scaled data).
-    *   *Action:* Wrap each training loop in a `try/except` block. Log the error, fail that specific model, but **let the others finish.**
+    *   *Action:* Each model is wrapped in a `try/except` block in `_train_single_model()`. Log the error, record `status: 'failed'` for that model, but **let the others finish.**
 3.  **Scoring**:
     *   *Regression:* RMSE (Lower is better).
     *   *Classification:* F1-Score (Higher is better, handles imbalance).
 
 ---
 
-## 4. Error Handling & Recovery matrix
+## 4. Error Handling & Recovery Matrix
 | Scenario | Detection | System Action | User Feedback |
 | :--- | :--- | :--- | :--- |
-| **Server Overload** | 503 Service Unavailable | Queue the request | "Server busy, please wait..." |
-| **Nan Values in Target** | Pre-check | Drop rows with NaN target | Warning in logs |
-| **All Models Fail** | Results list empty | Raise `RuntimeError` | "Training failed. Check data quality." |
-| **Windows IO Lock** | `joblib` Temp Error | Redirect to `tmp/joblib` | Handled internally (retry logic) |
-| **SHAP Computation** | Library crash/timeout | Log warning & skip plot | "Skipped due to data complexity" |
-| **Browser Closed** | Socket disconnect | Thread continues (orphan) | Job completes in background (results saved) |
+| **Server Overload / Large Dataset** | No guard currently implemented | Flask thread blocks until training completes; gateway may time out | Browser hangs; no user feedback until redirect |
+| **NaN Values in Target** | `pd.to_numeric` + `fillna(0)` in `execution.py` | Coerced to numeric; NaNs filled with 0 | Warning in logs only |
+| **All Models Fail** | Results list empty after training loop | `RuntimeError` raised, caught by outer `try/except` in `app.py` | Flash error and redirect to homepage |
+| **Windows IO Lock** | `joblib` Temp Folder error | Redirected to `interface/tmp/joblib` via env variable set at startup | Handled internally and silently |
+| **SHAP Computation Failure** | `try/except` in `execution.py` around SHAP block | Logs a warning and skips plot generation | Dashboard loads without the SHAP card |
+| **Non-CSV File Upload** | `.endswith('.csv')` check in `app.py` | Flash error and redirect to homepage | "Only CSV files are allowed" |
 
 ---
 

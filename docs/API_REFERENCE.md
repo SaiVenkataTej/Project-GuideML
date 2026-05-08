@@ -32,10 +32,16 @@ This document provides detailed technical specifications for every Python file i
 
 ### `evaluation.py`
 **Module: Metric Calculation**
-*   **`calculate_classification_metrics(y_true, y_pred)`**:
-    *   Returns: Dictionary {Accuracy, Precision, Recall, F1}.
-*   **`calculate_regression_metrics(y_true, y_pred)`**:
-    *   Returns: Dictionary {RMSE, MAE, R2}.
+*   **`calculate_rmse(y_true, y_pred)`** → `float`
+*   **`calculate_mae(y_true, y_pred)`** → `float`
+*   **`calculate_r2_score(y_true, y_pred)`** → `float`
+*   **`calculate_adjusted_r2(y_true, y_pred, n_samples, n_features)`** → `float`
+*   **`calculate_accuracy(y_true, y_pred)`** → `float`
+*   **`calculate_f1_score(y_true, y_pred, average='weighted')`** → `float`
+*   **`calculate_roc_auc_score(y_true, y_proba)`** → `float`
+*   **`calculate_precision(y_true, y_pred)`** → `float`
+*   **`calculate_log_loss(y_true, y_proba)`** → `float`
+*   **`measure_prediction_latency(model, X_test, n_runs=100)`** → `float`
 
 ### `knowledge_base.py`
 **Module: Static Knowledge**
@@ -53,9 +59,10 @@ This document provides detailed technical specifications for every Python file i
 
 ### `tuning.py`
 **Module: Hyperparameter Optimization**
-*   **`tune_hyperparameters(model, X_train, y_train)`**:
-    *   Uses `Optuna` (Bayesian Optimization) to find the best settings for the given model.
-    *   Returns the *tuned* model instance.
+*   **`get_grid_search_tuner(estimator, param_grid, cv, scoring)`**: Returns a configured `GridSearchCV` object. Used for simpler models (Linear/Logistic Regression).
+*   **`get_random_search_tuner(estimator, param_distributions, cv, scoring, n_iter=10)`**: Returns a configured `RandomizedSearchCV` object. Used for Decision Trees.
+*   **`get_halving_grid_search_tuner(estimator, param_grid, cv, scoring, factor=3)`**: Returns a `HalvingGridSearchCV` object using successive halving. Used for KNN.
+*   **`run_optuna_optimization(estimator_class, param_space_func, X, y, cv, scoring, n_trials=20)`**: Executes a full Optuna Bayesian optimization study and returns the best fitted model. Used for Random Forest and SVM.
 
 ### `visualization.py`
 **Module: Plotting Utilities**
@@ -93,7 +100,7 @@ Each of these files contains a class inheriting from `BaseModel`, implementing t
 
 ### `app.py`
 **Module: Flask Web Server**
-*   **`@app.route('/')`**: Renders the homepage (`index.html`).
-*   **`@app.route('/process', methods=['POST'])`**: Accepts file uploads and starts the background job.
-*   **`background_training(job_id)`**: The threaded worker function that calls `ModelExecutor`.
-
+*   **`@app.route('/')`** — `GET`: Renders the homepage (`index.html`).
+*   **`@app.route('/process', methods=['POST'])`**: Accepts file upload and target column, runs the full `ModelExecutor.run()` pipeline **synchronously** on the request thread, then redirects to `/dashboard`.
+*   **`@app.route('/dashboard')`** — `GET`: Reads from the global `LAST_RESULTS` dict and renders `dashboard.html`.
+*   **`@app.route('/download_model')`** — `GET`: Serves `best_model.pkl` as a file download.
