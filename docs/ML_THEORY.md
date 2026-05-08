@@ -120,7 +120,7 @@ Every model in GuideML isn't just a generic version. They have been "tuned" to y
 
 When you see settings like `C=0.1` in an SVM or `max_depth=10` in a Random Forest, you're looking at the precise structural adjustments our AutoML engine made to get you the highest score. It's the difference between a "tailored suit" and one "off the rack."
 
-**Why we use it:** It is lightning fast. We often use it as a "sanity check" or for text data.
+**Why we use it:** It is lightning fast and surprisingly effective. It's the best baseline to run when you have lots of features and want a quick probabilistic answer.
 
 ---
 

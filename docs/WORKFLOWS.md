@@ -76,6 +76,6 @@ This document is for the architects and senior developers who need to know exact
 Want to add "XGBoost"?
 1.  Create `core_recommender/modeling/xgboost.py`.
 2.  Inherit from `BaseModel`.
-3.  Implement `fit()`, `predict()`, and `get_parameter_descriptions()`.
-4.  Add to `execution.py` imports and register in `ModelExecutor`.
+3.  Implement all abstract methods: `preprocess()`, `fit()`, `calculate_metrics()`, `get_diagnostic_data()`, and `get_feature_importance()`.
+4.  Add to `execution.py` imports and register in `_get_candidate_models()`.
 5.  **Done.** The Executor picks it up automatically.

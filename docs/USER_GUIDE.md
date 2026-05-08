@@ -65,7 +65,7 @@ Imagine you have a spreadsheet (CSV file) with data—maybe it's house prices, o
 **What happens next?**
 While you wait, our specific "worker bees" (the backend code) are:
 *   Cleaning your data (fixing missing values).
-*   Training multiple AI brains simultaneously.
+*   Training multiple AI brains **one by one** (sequentially).
 *   Testing them against each other.
 *   **Decoding the Brain**: Calculating SHAP values to explain *why* it made its decisions.
 

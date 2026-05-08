@@ -33,13 +33,13 @@ This is the magic part. In old websites, if you wanted new info, you had to relo
 
 ## 2. A Walkthrough of Our Interface
 
-Let's look at `dashboard.html` and `script.js` line-by-line using this analogy.
+Let's look at `index.html` and `script.js` using this analogy.
 
-### The HTML Structure (`templates/dashboard.html`)
-You'll see tags like `<div>`, `<h1>`, and `<button>`.
-*   `<div id="loading-spinner">`: This is a waiting room. It's hidden by default (CSS does that). When JS says "Show it!", it appears.
-*   `<div id="results-area">`: This is the main dining room. It contains the **Leaderboard** and **Overview** tabs.
-*   `<div id="explainability-area">`: This is the "Consultation Room"—a new section showing the **Model DNA** and **SHAP plots**.
+### The HTML Structure (`templates/index.html`)
+You'll see tags like `<div>`, `<h1>`, and `<form>`.
+*   `<form id="uploadForm" action="/process" method="POST">`: This is the order form. When submitted, it sends the CSV file and settings directly to the `/process` route on the server.
+*   `<div id="loadingOverlay">`: This is a waiting room. It's hidden by default. When JS detects the form is submitted, it shows this overlay to give the user *visual* feedback while the server is working.
+*   `<div id="storyContainer">`: A table inside the overlay that animates through a sequence of processing steps to simulate progress.
 
 ### The JavaScript Logic (`static/js/script.js`)
 
@@ -47,47 +47,37 @@ You'll see tags like `<div>`, `<h1>`, and `<button>`.
 ```javascript
 document.addEventListener('DOMContentLoaded', () => { ... });
 ```
-This just means: "Wait until the restaurant is open (page loaded) before doing anything."
+This means: "Wait until the page is loaded before doing anything."
 
 #### The "Submission" (Taking the Order)
 ```javascript
-form.addEventListener('submit', (e) => {
-    e.preventDefault(); // Stop the page from reloading!
-    // ...
+form.addEventListener('submit', function() {
+    loadingOverlay.classList.remove('d-none');
+    startEngineOrchestration();
 });
 ```
-*   `e.preventDefault()`: Crucial! It prevents the browser from doing the old-school "reload page" behavior. It says, "Chill, I'll handle this request personally."
+*   **Note:** There is no `e.preventDefault()` here. The form performs a standard, synchronous browser POST to `/process`. The loading overlay and its animations play purely on the client side while the browser waits for the server response.
+*   The animation sequence in `startEngineOrchestration()` is **cosmetic only** — it runs on a timer and is not connected to actual backend progress.
 
-#### The "Fetch" (Sending the Order to the Kitchen)
+#### The CSV Header Parser
 ```javascript
-fetch('/process', {
-    method: 'POST',
-    body: formData
-})
+function parseCSVLine(text) { ... }
 ```
-*   `fetch`: This is the modern way to do AJAX. It's literally sending a digital waiter to the `/process` URL (our Python backend) with your data (`formData`).
-
-#### The "Polling" (Checking if Food is Ready)
-Machine learning takes time. It's like ordering a soufflé. You can't just stand there.
-We use a technique called **Polling**:
-1.  We send the order.
-2.  The kitchen gives us a Ticket ID (`job_id`).
-3.  We ask every 2 seconds: "Is Ticket #123 ready?" (`setInterval`)
-4.  When they say "Yes!", we serve the food.
+*   When a file is selected, `script.js` reads just the first 8KB of the file to parse column names and populate the "Target Column" dropdown — without uploading anything yet.
 
 ### The Python Connection (`app.py`)
 This is the Kitchen.
-*   It receives the `POST` request.
-*   It starts a **Background Thread** (a sous-chef) to cook the model so the main waiter isn't blocked.
-*   It saves the result to a global variable (the pass-through window).
+*   It receives the `POST` request with the uploaded file.
+*   It runs the **entire ML pipeline synchronously** on the request thread — training all models, generating plots, and saving the result.
+*   Once complete, it stores results in a global `LAST_RESULTS` variable and issues an HTTP `302` redirect to `/dashboard`.
 
 ---
 
 ## 3. Why This Architecture Matters
 
-We built it this way for one reason: **User Experience (UX).**
-*   **Without AJAX:** The screen would freeze white for 30 seconds while the model trains. The user would think it crashed.
-*   **With AJAX + Polling:** The user sees a progress bar, status updates ("Training Random Forest..."), and feels in control.
-*   **Transparency First:** By exposing the **Model DNA** and **SHAP influence**, we turn a "Black Box" into a "Glass Box."
+We built it this way for simplicity as a **local, single-user tool**:
+*   **Without AJAX:** The user submits the form and the browser waits. The loading overlay provides visual feedback, but it is purely cosmetic — the browser is blocked until the server responds.
+*   **The Limitation:** If the ML training takes a long time (e.g., large dataset, many models), the browser may display a "page unresponsive" warning or the connection may time out. This is a known current limitation.
+*   **Transparency First:** By exposing the **Model DNA** and **SHAP influence** on the dashboard, we turn a \"Black Box\" into a \"Glass Box.\"
 
-**That is the difference between a school project and a professional application.**
+**The difference between a local tool and a production application** is async processing (Celery/Redis + WebSockets). That is the natural next step for this project.
