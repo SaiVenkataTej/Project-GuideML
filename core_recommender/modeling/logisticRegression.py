@@ -11,6 +11,7 @@ from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer, 
     get_one_hot_encoder, 
@@ -29,6 +30,7 @@ from core_recommender.evaluation import (
 
 # Import centralized logger
 from core_recommender.logger import get_logger
+from core_recommender.exceptions import DataValidationError
 logger = get_logger(__name__)
 
 # --- DEFAULT CONFIGURATION ---
@@ -45,6 +47,7 @@ CONFIG = {
 # LogisticRegressionModel Class
 # =========================================================================
 
+@register_model(task='classification')
 class LogisticRegressionModel(BaseModel):
     """A concrete implementation of Logistic Regression for Classification tasks.
     
@@ -107,7 +110,10 @@ class LogisticRegressionModel(BaseModel):
         
         if y.isna().any():
             logger.error(f"[{self.name}] Target variable contains {y.isna().sum()} NaN values")
-            raise ValueError("Target variable 'y' contains missing values (NaNs).")
+            raise DataValidationError(
+                "Target variable contains NaN values. Handle missing targets before training.",
+                column='y'
+            )
 
         # 1. Numerical Pipeline
         num_steps: List[Tuple[str, Any]] = [
@@ -276,18 +282,27 @@ class LogisticRegressionModel(BaseModel):
             'is_odds_ratio': True
         }
 
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Retrieves feature importance based on model coefficients."""
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """Logistic-Regression-specific diagnostics.
+
+        Returns:
+            Dict[str, Any]:
+                * ``coefficients`` — The model's decision boundary weights per
+                  feature (flattened to 1-D for binary / OvR scenarios).
+                  Useful for interpreting feature influence direction.
+        """
         if self.best_estimator is None:
             return {}
-            
+
         final_model = self.best_estimator.named_steps['model']
-        if hasattr(final_model, 'coef_'):
-            coefs = final_model.coef_
-            if coefs.ndim > 1: coefs = coefs[0]
-            return {'importances': coefs.tolist()}
-        return {}
-    
+        if not hasattr(final_model, 'coef_'):
+            return {}
+
+        coefs = final_model.coef_
+        if coefs.ndim > 1:
+            coefs = coefs[0]
+        return {'coefficients': coefs.tolist()}
+
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """
         Extracts and describes the final tuned hyperparameters of the Logistic Regression.

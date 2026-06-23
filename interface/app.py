@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from core_recommender.execution import ModelExecutor
 from core_recommender.knowledge_base import MODEL_KNOWLEDGE
+from core_recommender.exceptions import DataValidationError, GuideMLError
 from core_recommender.visualization import (
     plot_correlation_heatmap, plot_feature_histograms, plot_roc_curve,
     plot_confusion_matrix, plot_feature_importance, plot_coefficient_bar_chart,
@@ -131,7 +132,9 @@ def process():
         
         # 9. Plotting logic
         if task_type == 'classification':
-            if 'y_proba' in diagnostics and diagnostics['y_proba'] is not None:
+            # ROC curve — only valid for binary classification
+            n_classes = len(np.unique(diagnostics.get('y_true', []))) if 'y_true' in diagnostics else 0
+            if 'y_proba' in diagnostics and diagnostics['y_proba'] is not None and n_classes == 2:
                 roc_path = os.path.join(app.config['IMAGE_FOLDER'], 'roc_curve.png')
                 plot_roc_curve(
                     np.asarray(diagnostics['y_true']),
@@ -175,22 +178,31 @@ def process():
                     save_path=residual_path
                 )
         
-        # Feature importance plots
-        if 'feature_importance' in best_model_data:
-            imp_data = best_model_data['feature_importance']
-            if imp_data and imp_data.get('type') == 'tree':
+        # Feature importance / coefficient plots
+        # Driven by tailored_diagnostics — each model exposes only what it has.
+        tailored = best_model_data.get('tailored_diagnostics', {})
+        feature_names = best_model_data.get('feature_names', [])
+
+        # Tree-based models (Random Forest, Decision Tree)
+        if 'feature_importances_mdi' in tailored or 'feature_importances' in tailored:
+            importances = tailored.get('feature_importances_mdi') or tailored.get('feature_importances', [])
+            if importances and len(feature_names) == len(importances):
                 imp_path = os.path.join(app.config['IMAGE_FOLDER'], 'feature_importance.png')
                 plot_feature_importance(
-                    list(imp_data['features'].keys()),
-                    list(imp_data['features'].values()),
+                    feature_names,
+                    importances,
                     best_model_data['name'],
                     save_path=imp_path
                 )
-            elif imp_data and imp_data.get('type') == 'linear':
+
+        # Linear models (Logistic Regression, Linear Regression, Linear SVM)
+        elif 'coefficients' in tailored:
+            coefs = tailored['coefficients']
+            if coefs and len(feature_names) == len(coefs):
                 coef_path = os.path.join(app.config['IMAGE_FOLDER'], 'coefficients.png')
                 plot_coefficient_bar_chart(
-                    list(imp_data['features'].keys()),
-                    list(imp_data['features'].values()),
+                    feature_names,
+                    coefs,
                     best_model_data['name'],
                     save_path=coef_path
                 )
@@ -206,15 +218,22 @@ def process():
         # 11. Redirect to dashboard
         return redirect('/dashboard')
     
+    except DataValidationError as e:
+        # Data problems are user-fixable — warn instead of error
+        flash(f'Data issue: {e}', 'warning')
+        return redirect('/')
+    except GuideMLError as e:
+        # All other typed pipeline errors
+        flash(f'Pipeline error [{type(e).__name__}]: {e}', 'danger')
+        return redirect('/')
     except Exception as e:
         import traceback
         error_msg = traceback.format_exc()
         print(f"ERROR in /process:\n{error_msg}")
-        # Try to use project logger if possible
         try:
             from core_recommender.logger import get_logger
             logger = get_logger(__name__)
-            logger.error(f"AutoML Pipeline failed: {str(e)}\n{error_msg}")
+            logger.error(f"Unhandled exception in AutoML Pipeline: {str(e)}\n{error_msg}")
         except:
             pass
         flash(f'An unexpected error occurred: {str(e)}', 'danger')
@@ -256,6 +275,7 @@ def dashboard():
     # Construct formatted results object for the dashboard template.
     # This architecture decoupling ensures the frontend only receives 
     # the necessary visual data and high-level summaries.
+    img_folder = app.config['IMAGE_FOLDER']
     formatted_results = {
         'summary': {
             'best_model': best_model_name,
@@ -269,10 +289,31 @@ def dashboard():
         },
         'leaderboard': results.get('leaderboard', []),
         'images': {
-            'diagnostics_1': 'roc_curve.png' if task_type == 'classification' else 'residuals.png',
-            'diagnostics_2': 'confusion_matrix.png' if task_type == 'classification' else 'predicted_vs_actual.png',
-            'importance': 'feature_importance.png' if os.path.exists(os.path.join(app.config['IMAGE_FOLDER'], 'feature_importance.png')) else None,
-            'shap': 'shap_summary.png' if os.path.exists(os.path.join(app.config['IMAGE_FOLDER'], 'shap_summary.png')) else None
+            # Only set a filename if the file was actually generated on disk.
+            # Prevents broken <img> tags when a plot is skipped (e.g. ROC for multiclass).
+            'diagnostics_1': (
+                'roc_curve.png'
+                if task_type == 'classification' and os.path.exists(os.path.join(img_folder, 'roc_curve.png'))
+                else 'residuals.png'
+                if task_type == 'regression' and os.path.exists(os.path.join(img_folder, 'residuals.png'))
+                else None
+            ),
+            'diagnostics_2': (
+                'confusion_matrix.png'
+                if task_type == 'classification' and os.path.exists(os.path.join(img_folder, 'confusion_matrix.png'))
+                else 'predicted_vs_actual.png'
+                if task_type == 'regression' and os.path.exists(os.path.join(img_folder, 'predicted_vs_actual.png'))
+                else None
+            ),
+            # Show feature_importance.png for tree models, coefficients.png for linear models
+            'importance': (
+                'feature_importance.png'
+                if os.path.exists(os.path.join(img_folder, 'feature_importance.png'))
+                else 'coefficients.png'
+                if os.path.exists(os.path.join(img_folder, 'coefficients.png'))
+                else None
+            ),
+            'shap': 'shap_summary.png' if os.path.exists(os.path.join(img_folder, 'shap_summary.png')) else None
         },
         'explainability': {
             'parameters': results['best_model'].get('explainability', {}).get('parameters', {})

@@ -11,6 +11,7 @@ from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,
     get_one_hot_encoder,
@@ -28,6 +29,7 @@ from core_recommender.evaluation import (
 
 # Import centralized logger
 from core_recommender.logger import get_logger
+from core_recommender.exceptions import DataValidationError, ConfigurationError
 logger = get_logger(__name__)
 
 # --- DEFAULT CONFIGURATION ---
@@ -46,6 +48,7 @@ CONFIG = {
 # NaiveBayesModel Class
 # =========================================================================
 
+@register_model(task='classification')
 class NaiveBayesModel(BaseModel):
     """A concrete implementation of Naive Bayes (Gaussian, Multinomial) for Classification.
     
@@ -82,7 +85,10 @@ class NaiveBayesModel(BaseModel):
                 'alpha': [0.01, 0.1, 0.5, 1.0, 5.0, 10.0]
             }
         else:
-            raise ValueError(f"Unsupported model_type: {self.model_type}")
+            raise ConfigurationError(
+                f"Unsupported model_type: '{self.model_type}'. "
+                f"Expected 'gaussian' or 'multinomial'."
+            )
 
     def preprocess(self, X: pd.DataFrame, y: pd.Series) -> Tuple[np.ndarray, np.ndarray, ColumnTransformer]:
         """Constructs and applies the feature pipeline optimized for Naive Bayes.
@@ -108,7 +114,10 @@ class NaiveBayesModel(BaseModel):
         # Check for NaNs in target
         if y.isna().any():
             logger.error(f"[{self.name}] Target variable contains {y.isna().sum()} NaN values")
-            raise ValueError("Target variable 'y' contains missing values.")
+            raise DataValidationError(
+                "Target variable contains NaN values. Handle missing targets before training.",
+                column='y'
+            )
 
         # 1. Pipeline Construction
         # Numerical Steps
@@ -257,9 +266,36 @@ class NaiveBayesModel(BaseModel):
             'feature_log_prob': getattr(final_model, 'feature_log_prob_', None)
         }
     
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Naive Bayes does not provide a global feature importance metric."""
-        return {}
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """Naive-Bayes-specific diagnostics.
+
+        Returns:
+            Dict[str, Any]:
+                * ``feature_log_prob``    — Log-probability of each feature
+                  per class (Multinomial) or ``None`` for Gaussian variants.
+                  Shape: (n_classes, n_features).  Useful for understanding
+                  which features are most discriminative per class.
+                * ``class_log_prior``     — Log prior probability of each
+                  class.  Reflects class imbalance captured by the model.
+                * ``model_type``          — ``'gaussian'`` or ``'multinomial'``.
+        """
+        if self.best_estimator is None:
+            return {}
+
+        final_model = self.best_estimator.named_steps['model']
+        return {
+            'model_type': self.model_type,
+            'feature_log_prob': (
+                final_model.feature_log_prob_.tolist()
+                if hasattr(final_model, 'feature_log_prob_')
+                else None
+            ),
+            'class_log_prior': (
+                final_model.class_log_prior_.tolist()
+                if hasattr(final_model, 'class_log_prior_')
+                else None
+            ),
+        }
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """Returns descriptions of the most important tuned parameters."""

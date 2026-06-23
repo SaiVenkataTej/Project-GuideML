@@ -11,6 +11,7 @@ from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,
     get_one_hot_encoder,
@@ -20,6 +21,7 @@ from core_recommender.preprocessing import (
 )
 from core_recommender.evaluation import (
     calculate_accuracy,
+    calculate_f1_score,
     calculate_rmse,
     get_tree_depth,
     get_leaf_count,
@@ -50,6 +52,7 @@ CONFIG = {
 # DecisionTreeModel Class
 # =========================================================================
 
+@register_model(task='both')
 class DecisionTreeModel(BaseModel):
     """A concrete implementation of Decision Trees for both Classification and Regression tasks.
     
@@ -242,6 +245,7 @@ class DecisionTreeModel(BaseModel):
 
         if self.is_classification:
             metrics['Accuracy'] = calculate_accuracy(y_test, y_pred) 
+            metrics['F1 Score'] = calculate_f1_score(y_test, y_pred, average='weighted')
         else:
             metrics['RMSE'] = calculate_rmse(y_test, y_pred) 
         
@@ -272,20 +276,49 @@ class DecisionTreeModel(BaseModel):
             'y_true': y_test,
             'y_proba': self.best_estimator.predict_proba(X_test) if self.is_classification else None,
             'model_name': self.name,
-            'feature_importances': self.get_feature_importance(),
+            'feature_importances': (
+                self.best_estimator.named_steps['model'].feature_importances_.tolist()
+                if hasattr(self.best_estimator.named_steps['model'], 'feature_importances_')
+                else []
+            ),
             'tree_dot_data': dot_data
         }
     
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Retrieves the Gini Importance."""
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """Decision-Tree-specific diagnostics.
+
+        Returns:
+            Dict[str, Any]:
+                * ``feature_importances`` — Gini-impurity-based importance scores
+                  per selected feature.
+                * ``tree_dot_data``       — Graphviz DOT source string for full
+                  tree-structure visualisation.
+                * ``tree_depth``          — Actual depth of the fitted tree.
+                * ``leaf_count``          — Number of leaf nodes.
+        """
         if self.best_estimator is None:
             return {}
-            
+
         final_tree = self.best_estimator.named_steps['model']
-        if hasattr(final_tree, 'feature_importances_'):
-             # Convert array to list for JSON serialization
-            return {'importances': final_tree.feature_importances_.tolist()}
-        return {}
+
+        dot_data = export_graphviz(
+            final_tree,
+            out_file=None,
+            filled=True,
+            rounded=True,
+            special_characters=True,
+        )
+
+        return {
+            'feature_importances': (
+                final_tree.feature_importances_.tolist()
+                if hasattr(final_tree, 'feature_importances_')
+                else []
+            ),
+            'tree_dot_data': dot_data,
+            'tree_depth': get_tree_depth(final_tree),
+            'leaf_count': get_leaf_count(final_tree),
+        }
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """Returns descriptions of the most important tuned parameters."""

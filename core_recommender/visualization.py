@@ -7,9 +7,36 @@ from matplotlib.figure import Figure
 import seaborn as sns
 import io
 import os
-import shap
+try:
+    import shap
+    HAS_SHAP = True
+except ImportError:
+    HAS_SHAP = False
 from typing import List, Optional, Dict, Any
 from sklearn.metrics import roc_curve, auc, confusion_matrix
+from PIL import Image
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _save_and_resize(fig, save_path, target_size=(800, 600)):
+    # Save with transparent background
+    fig.savefig(save_path, bbox_inches="tight", transparent=True)
+    try:
+        img = Image.open(save_path).convert("RGBA")
+        # Resize using BILINEAR while preserving aspect ratio
+        img.thumbnail(target_size, resample=Image.Resampling.BILINEAR)
+        # Create a blank transparent canvas
+        new_img = Image.new("RGBA", target_size, (255, 255, 255, 0))
+        # Center the resized image
+        new_img.paste(img, ((target_size[0] - img.width) // 2, (target_size[1] - img.height) // 2), img)
+        new_img.save(save_path, "PNG")
+    except OSError as e:
+        logger.error(f"Failed to resize image {save_path}: {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"Unexpected error resizing image {save_path}: {e}", exc_info=True)
+
 
 # --- Configuration ---
 sns.set_style("whitegrid")
@@ -72,7 +99,7 @@ def plot_correlation_heatmap(df: pd.DataFrame, target_column: str, save_path: Op
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     # How to return plot object for web display:
     # buffer = io.BytesIO()
@@ -117,7 +144,7 @@ def plot_feature_histograms(df: pd.DataFrame, features: List[str], save_path: Op
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -177,7 +204,7 @@ def plot_roc_curve(y_true: np.ndarray, y_proba: np.ndarray, model_name: str, sav
     ax.legend(loc="lower right")
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -220,7 +247,7 @@ def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, classes: np.nd
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -256,7 +283,7 @@ def plot_feature_importance(feature_names: List[str], importances: np.ndarray, m
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -305,7 +332,7 @@ def plot_coefficient_bar_chart(feature_names: List[str], coefficients: np.ndarra
     if save_path:
         import os
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -321,6 +348,13 @@ def plot_shap_summary(model: Any, X: pd.DataFrame, model_name: str, save_path: s
     """
     plt.figure(figsize=(10, 6))
     
+    if not HAS_SHAP:
+        plt.text(0.5, 0.5, "SHAP Unavailable: shap library not installed", ha='center', va='center')
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path)
+        plt.close()
+        return
+
     try:
         # Performance Guard: Sample data for speed if the dataset is large.
         # SHAP calculation can be computationally expensive (especially Kernel/Permutation).
@@ -349,9 +383,13 @@ def plot_shap_summary(model: Any, X: pd.DataFrame, model_name: str, save_path: s
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
         plt.savefig(save_path, bbox_inches='tight', dpi=100)
     except Exception as e:
+        logger.error(f"SHAP generation failed for {model_name}: {e}", exc_info=True)
         # Graceful failure: Render an error message on the plot artifact if SHAP fails.
         plt.text(0.5, 0.5, f"SHAP Unavailable: {str(e)}", ha='center', va='center')
-        plt.savefig(save_path)
+        try:
+            plt.savefig(save_path)
+        except OSError as save_err:
+            logger.error(f"Failed to save SHAP fallback image: {save_err}")
     finally:
         plt.close()
 
@@ -389,7 +427,7 @@ def plot_predicted_vs_actual(y_true: np.ndarray, y_pred: np.ndarray, model_name:
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -419,7 +457,7 @@ def plot_residual_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, 
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -453,7 +491,7 @@ def plot_qq_plot(y_true: np.ndarray, y_pred: np.ndarray, model_name: str, save_p
     plt.tight_layout()
     
     if save_path:
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig
 
@@ -503,6 +541,6 @@ def plot_precision_recall_curve(y_true: np.ndarray, y_proba: np.ndarray, model_n
     if save_path:
         import os
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
-        fig.savefig(save_path)
+        _save_and_resize(fig, save_path)
         
     return fig

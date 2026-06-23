@@ -37,7 +37,7 @@ This project demonstrates proficiency in standard software and ML engineering co
     * `UPDATE_LOG.md`: Changelog of documentation and architectural updates.
 * `logs/`: System logs.
 * `data/`: Datasets.
-* `tests/`: Unit tests (Currently Empty - high priority for future implementation).
+* `tests/`: Unit tests (Implemented: checks model pipelines, profiling, visualization, and execution).
 
 ## 📚 Documentation Index
 

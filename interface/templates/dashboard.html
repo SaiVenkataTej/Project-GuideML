@@ -162,21 +162,29 @@
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="glass-card p-0">
-                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white bg-opacity-02">
+                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
                                 <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Area Under ROC" if results.summary.task == 'CLASSIFICATION' else "Residual Distribution" }}</h6>
                             </div>
                             <div class="p-4 text-center">
+                                {% if results.images.diagnostics_1 %}
                                 <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}" class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05">
+                                {% else %}
+                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic plot unavailable.</div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="glass-card p-0">
-                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white bg-opacity-02">
+                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
                                 <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Confusion Matrix" if results.summary.task == 'CLASSIFICATION' else "Prediction Precision" }}</h6>
                             </div>
                             <div class="p-4 text-center">
+                                {% if results.images.diagnostics_2 %}
                                 <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}" class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05">
+                                {% else %}
+                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic plot unavailable.</div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -186,12 +194,12 @@
             <!-- TAB: EXPLAINABILITY -->
             <div class="tab-pane fade" id="v-pills-explain" role="tabpanel">
                 <div class="glass-card p-0 mb-4">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white bg-opacity-02">
+                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">Weight Analysis (Feature Importance)</h6>
                     </div>
                     <div class="p-4 text-center">
                         {% if results.images.importance %}
-                        <img src="{{ url_for('static', filename='images/feature_importance.png') }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 450px;">
+                        <img src="{{ url_for('static', filename='images/' + results.images.importance) }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 450px;">
                         {% else %}
                         <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Weights not interpretable for this architecture.</div>
                         {% endif %}
@@ -203,7 +211,7 @@
                     <div class="row g-3">
                         {% for p_name, p_info in results.explainability.parameters.items() %}
                         <div class="col-md-4">
-                            <div class="p-3 rounded-4 bg-white bg-opacity-02 border border-white border-opacity-05">
+                            <div class="p-3 rounded-4 bg-white border border-white border-opacity-05" style="--bs-bg-opacity: .02;">
                                 <p class="x-small text-muted fw-bold mb-1 text-uppercase">{{ p_name }}</p>
                                 <p class="h5 fw-bold text-primary mb-1">{{ p_info.value }}</p>
                                 <p class="x-small text-white-50 mb-0 opacity-75">{{ p_info.desc }}</p>
@@ -214,7 +222,7 @@
                 </div>
 
                 <div class="glass-card p-0">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white bg-opacity-02">
+                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">SHAP Global Influence Analysis</h6>
                     </div>
                     <div class="p-4 text-center">
@@ -233,13 +241,13 @@
                     <div class="col-lg-6">
                         <div class="glass-card p-4">
                             <h6 class="mb-4 small fw-bold ls-1 text-uppercase">Cross-Feature Correlation</h6>
-                            <img src="{{ url_for('static', filename='images/heatmap.png') }}" class="img-fluid rounded-4 shadow-lg">
+                            <img src="{{ url_for('static', filename='images/heatmap.png') }}" class="img-fluid rounded-4 shadow-lg" style="height: 400px; width: 100%; object-fit: contain;">
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="glass-card p-4">
                             <h6 class="mb-4 small fw-bold ls-1 text-uppercase">Frequency Spectrums</h6>
-                            <img src="{{ url_for('static', filename='images/histograms.png') }}" class="img-fluid rounded-4 shadow-lg">
+                            <img src="{{ url_for('static', filename='images/histograms.png') }}" class="img-fluid rounded-4 shadow-lg" style="height: 400px; width: 100%; object-fit: contain;">
                         </div>
                     </div>
                 </div>
@@ -248,7 +256,7 @@
             <!-- TAB: LOGS -->
             <div class="tab-pane fade" id="v-pills-logs" role="tabpanel">
                 <div class="glass-card border-primary border-opacity-20">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white bg-opacity-02 d-flex justify-content-between align-items-center">
+                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white d-flex justify-content-between align-items-center" style="--bs-bg-opacity: .02;">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">System Execution Log</h6>
                         <span class="badge bg-primary bg-opacity-10 text-primary x-small">LIVE</span>
                     </div>

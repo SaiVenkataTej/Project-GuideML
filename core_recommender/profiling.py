@@ -66,15 +66,16 @@ class DataProfiler:
             sample_feats = numeric_X.sample(n=min(3, numeric_X.shape[1]), axis=1, random_state=42)
             p_values = []
             for col in sample_feats.columns:
-                # Shapiro test requires sample size < 5000 usually, let's take a sample
                 # Drop NA to avoid errors in Shapiro
-                sample_data = sample_feats[col].dropna().sample(n=min(500, len(sample_feats)), random_state=42)
-                if sample_data.nunique() > 1: # Shapiro requires at least 3 unique values ideally, but definitely > 1
-                    try:
-                        _, p = stats.shapiro(sample_data)
-                        p_values.append(p)
-                    except Exception:
-                        pass
+                dropna_col = sample_feats[col].dropna()
+                if len(dropna_col) >= 3:
+                    sample_data = dropna_col.sample(n=min(500, len(dropna_col)), random_state=42)
+                    if sample_data.nunique() > 1: # Shapiro requires at least 3 unique values ideally, but definitely > 1
+                        try:
+                            _, p = stats.shapiro(sample_data)
+                            p_values.append(p)
+                        except (ValueError, TypeError) as e:
+                            logger.warning(f"Shapiro-Wilk test failed for column '{col}': {e}")
             
             # If all p-values > 0.05, we might say it's roughly Gaussian (very simplified)
             if p_values and all(p > 0.05 for p in p_values):

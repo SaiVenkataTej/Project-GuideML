@@ -3,7 +3,7 @@ import numpy as np
 import time
 import traceback
 import os
-import shap
+import inspect
 from typing import Dict, Any, List, Optional, Tuple, Union, Callable
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
@@ -12,13 +12,26 @@ from sklearn.preprocessing import LabelEncoder
 # --- PROJECT IMPORTS ---
 from core_recommender.logger import get_logger
 from core_recommender.modeling.baseModel import BaseModel
-from core_recommender.modeling.knn import KNNModel
-from core_recommender.modeling.linearRegression import LinearRegressionModel
-from core_recommender.modeling.logisticRegression import LogisticRegressionModel
-from core_recommender.modeling.randomForest import RandomForestModel
-from core_recommender.modeling.decisionTrees import DecisionTreeModel
-from core_recommender.modeling.svms import SVMModel
-from core_recommender.modeling.naiveBayes import NaiveBayesModel
+from core_recommender.exceptions import (
+    DataValidationError,
+    InsufficientDataError,
+    ModelTrainingError,
+    PipelineError,
+)
+
+# Registry-based model discovery (OCP / DIP)
+# Importing the concrete model modules causes their @register_model decorators
+# to fire, populating the registry.  The executor never needs to be touched
+# when a new model is added.
+from core_recommender.modeling.registry import get_registered_models
+import core_recommender.modeling.knn                # noqa: F401 — triggers registration
+import core_recommender.modeling.linearRegression   # noqa: F401
+import core_recommender.modeling.logisticRegression # noqa: F401
+import core_recommender.modeling.randomForest       # noqa: F401
+import core_recommender.modeling.decisionTrees      # noqa: F401
+import core_recommender.modeling.svms               # noqa: F401
+import core_recommender.modeling.naiveBayes         # noqa: F401
+
 from core_recommender.profiling import DataProfiler
 from .visualization import plot_shap_summary
 
@@ -94,7 +107,7 @@ class ModelExecutor:
         if self.task_type != 'auto':
             return self.task_type
             
-        if pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or pd.api.types.is_categorical_dtype(y):
+        if pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or isinstance(y.dtype, pd.CategoricalDtype):
             # Try converting to numeric to see if they are numbers stored as strings
             try:
                 pd.to_numeric(y, errors='raise')
@@ -229,57 +242,63 @@ class ModelExecutor:
         return df_filtered
 
     def _get_candidate_models(self, task_type: str, include_models: Optional[List[str]] = None) -> List[BaseModel]:
-        """Instantiates the list of candidate models for the task.
+        """Instantiates candidate models from the global registry.
+
+        Satisfies OCP / DIP: the executor never needs modification when new
+        models are added.  Each registered class must accept an optional
+        ``is_classification`` boolean constructor parameter.
 
         Args:
             task_type (str): 'classification' or 'regression'.
-            include_models (Optional[List[str]]): List of model names to filter by.
+            include_models (Optional[List[str]]): Whitelist of model name
+                substrings.  ``None`` means all registered models.
 
         Returns:
-            List[BaseModel]: List of instantiated model objects.
+            List[BaseModel]: Ready-to-train model instances.
         """
+        is_clf = (task_type == 'classification')
+        registered = get_registered_models(task_type)
+
         all_candidates: List[BaseModel] = []
-        
-        # Universal
-        all_candidates.append(KNNModel(is_classification=(task_type == 'classification')))
-        
-        if task_type == 'classification':
-            all_candidates.append(LogisticRegressionModel())
-            all_candidates.append(RandomForestModel(is_classification=True))
-            all_candidates.append(DecisionTreeModel(is_classification=True))
-            all_candidates.append(SVMModel(is_classification=True))
-            all_candidates.append(NaiveBayesModel())
-            
-        elif task_type == 'regression':
-            all_candidates.append(LinearRegressionModel())
-            all_candidates.append(RandomForestModel(is_classification=False))
-            all_candidates.append(DecisionTreeModel(is_classification=False))
-            all_candidates.append(SVMModel(is_classification=False))
+        for cls in registered:
+            try:
+                # Models that support both tasks accept is_classification kwarg;
+                # task-specific models (e.g. LogisticRegression) do not.
+                sig = inspect.signature(cls.__init__)
+                if 'is_classification' in sig.parameters:
+                    all_candidates.append(cls(is_classification=is_clf))
+                else:
+                    all_candidates.append(cls())
+            except Exception as exc:  # pragma: no cover
+                logger.warning(f"⚠️ Could not instantiate {cls.__name__}: {exc}")
 
         if not include_models:
-            logger.info(f"No specific models selected - training all {len(all_candidates)} available models")
+            logger.info(
+                f"No specific models selected — training all "
+                f"{len(all_candidates)} registered models."
+            )
             return all_candidates
 
-        # Filter
-        selected_models = []
+        # Whitelist filter
+        selected_models: List[BaseModel] = []
         for model in all_candidates:
-            # Check if user string is substring of model name
-            matched_by = None
             for inc in include_models:
-                # Handle comma-separated strings or multiple models in one checkbox value
                 possible_matches = [p.strip().lower() for p in inc.split(',')]
                 if any(p in model.name.lower() for p in possible_matches if p):
-                    matched_by = inc
+                    selected_models.append(model)
                     break
-            
-            if matched_by:
-                selected_models.append(model)
-        
+
         if not selected_models:
-            logger.warning(f"⚠️ No models matched selection {include_models}. Defaulting to ALL.")
+            logger.warning(
+                f"⚠️ No models matched selection {include_models}. "
+                f"Defaulting to ALL."
+            )
             return all_candidates
-        
-        logger.info(f"Training {len(selected_models)} selected models: {[m.name for m in selected_models]}")
+
+        logger.info(
+            f"Training {len(selected_models)} selected models: "
+            f"{[m.name for m in selected_models]}"
+        )
         return selected_models
 
     def _train_single_model(self, model: BaseModel, X_train: pd.DataFrame, y_train: Union[pd.Series, np.ndarray], 
@@ -338,11 +357,14 @@ class ModelExecutor:
                 'test_data_proc': (X_test_proc, y_test) 
             }
         except Exception as e:
-            traceback.print_exc()
+            logger.error(
+                f"❌ [{type(e).__name__}] {model.name} failed: {e}",
+                exc_info=True
+            )
             return {
                 'model_name': model.name,
                 'status': 'failed',
-                'error': str(e)
+                'error': f"[{type(e).__name__}] {e}"
             }
 
     def _get_feature_names(self, column_transformer: ColumnTransformer) -> List[str]:
@@ -364,7 +386,8 @@ class ModelExecutor:
                 try:
                     names = transformer.get_feature_names_out(columns)
                     feature_names.extend(names)
-                except Exception:
+                except (AttributeError, ValueError, TypeError) as e:
+                    logger.debug(f"Failed to get feature names from {name}: {e}")
                     feature_names.extend(columns)
             else:
                 feature_names.extend(columns)
@@ -398,7 +421,11 @@ class ModelExecutor:
         # 1. Validation
         if target_column not in df.columns:
             logger.error(f"❌ Target column '{target_column}' not found.")
-            raise ValueError(f"Target column '{target_column}' not found in DataFrame.")
+            raise DataValidationError(
+                f"Target column '{target_column}' not found in the dataset.",
+                column=target_column,
+                available_columns=list(df.columns)
+            )
         
         self._log_step("Initialization", f"Loaded dataset with {df.shape[0]} rows.", "fas fa-database")
             
@@ -511,7 +538,23 @@ class ModelExecutor:
                 progress_callback=sub_step_callback
             )
             results_list.append(result)
+            
+            if result['status'] == 'success':
+                self._log_step("Model Assembly", f"Successfully built {model.name}.", "fas fa-microchip")
+            else:
+                self._log_step("Model Failure", f"Failed to build {model.name}: {result.get('error', 'Unknown Error')}", "fas fa-exclamation-triangle")
 
+        # Sort results so the best model is at the top of the leaderboard.
+        def get_sort_key(r):
+            is_success = 1 if r.get('status') == 'success' else 0
+            if inferred_task == 'classification':
+                metric_val = r.get('metrics', {}).get('F1 Score', -1.0)
+                return (is_success, metric_val)
+            else:
+                metric_val = r.get('metrics', {}).get('RMSE', float('inf'))
+                return (is_success, -metric_val)
+        
+        results_list = sorted(results_list, key=get_sort_key, reverse=True)
         self.results = results_list
         valid_results = [r for r in results_list if r['status'] == 'success']
         
@@ -542,11 +585,13 @@ class ModelExecutor:
             
             technique_details = list(set(technique_details))
             self._log_step("Feature Preprocessing", f"Techniques: {', '.join(technique_details)}", "fas fa-cogs")
-        except Exception:
+        except (AttributeError, ValueError, TypeError) as e:
+            logger.debug(f"Failed to extract technique details: {e}")
             self._log_step("Feature Preprocessing", "Standard scaling/imputation.", "fas fa-cogs")
 
         # 11. Explainability & Summary
         diagnostics = self.best_model_instance.get_diagnostic_data(X_test, np.asarray(y_test))
+        self._log_step('Diagnostics Generation', 'Computed performance metrics and visualizations.', 'fas fa-chart-bar')
         feature_names = self._get_feature_names(best_run['preprocessor'])
         
         # Filter feature names if selector was used
@@ -556,11 +601,9 @@ class ModelExecutor:
                 indices = fs.get_support(indices=True)
                 feature_names = [feature_names[i] for i in indices if i < len(feature_names)]
 
-        importance_data = self.best_model_instance.get_feature_importance()
-        if 'importances' in importance_data:
-             # Ensure length matches before assigning
-             if len(feature_names) == len(importance_data['importances']):
-                importance_data['feature_names'] = feature_names
+        # Single call — executor never needs to know which model-specific
+        # features exist.  Each model decides what it exposes via its override.
+        tailored_diagnostics = self.best_model_instance.get_tailored_diagnostics()
         
         # 12. Modular SHAP (Explainability Layer)
         # This section generates global feature impact plots using SHAP values.
@@ -573,7 +616,13 @@ class ModelExecutor:
                 os.makedirs(os.path.dirname(shap_path), exist_ok=True)
                 
             # Convert test data back to a labeled DataFrame for better SHAP plot annotations.
-            X_test_df = pd.DataFrame(X_test, columns=feature_names)
+            # Using the preprocessed test data so the shapes and dimensions match the model expectations.
+            X_test_proc, _ = best_run['test_data_proc']
+            if X_test_proc.shape[1] == len(feature_names):
+                X_test_df = pd.DataFrame(X_test_proc, columns=feature_names)
+            else:
+                cols = feature_names[:X_test_proc.shape[1]] if X_test_proc.shape[1] < len(feature_names) else [f"feature_{i}" for i in range(X_test_proc.shape[1])]
+                X_test_df = pd.DataFrame(X_test_proc, columns=cols)
             
             # Generate the visualization. 
             # Note: We pass the underlying 'best_estimator' if it's wrapped in a Pipeline.
@@ -581,7 +630,7 @@ class ModelExecutor:
             logger.info("✅ SHAP Summary Plot generated successfully.")
         except Exception as e:
             # SHAP is a value-added feature; we log the failure but do not halt the entire pipeline.
-            logger.warning(f"⚠️ SHAP generation skipped: {str(e)}")
+            logger.warning(f"⚠️ SHAP generation skipped: {str(e)}", exc_info=True)
 
         # 13. Construct Comprehensive Final Result Summary
         summary = {
@@ -591,6 +640,7 @@ class ModelExecutor:
             'leaderboard': [
                 {
                     'model': r['model_name'], 
+                    'name': r['model_name'], 
                     'metrics': r.get('metrics', {}),
                     'status': r['status'],
                     'error': r.get('error')
@@ -602,8 +652,9 @@ class ModelExecutor:
                 'metrics': self.best_model_metrics,
                 'diagnostics': diagnostics,
                 'classes': list(self.label_encoder.classes_) if self.label_encoder else None,
+                'feature_names': feature_names,
+                'tailored_diagnostics': tailored_diagnostics,
                 'explainability': {
-                    'importance': importance_data,
                     'parameters': self.best_model_instance.get_parameter_descriptions(),
                     'has_shap': True  # Flag to trigger app.py plotting
                 },

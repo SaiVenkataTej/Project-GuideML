@@ -28,6 +28,8 @@ from sklearn.feature_selection import (
     RFE,
     SelectFromModel
 )
+from core_recommender.logger import get_logger
+from core_recommender.exceptions import ConfigurationError
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NeighborhoodComponentsAnalysis as NCA
 from sklearn.base import BaseEstimator
@@ -200,7 +202,10 @@ def get_select_k_best(k: int = 10,
         elif score_func == 'mutual_info_classif':
             func = mutual_info_classif
         else:
-            raise ValueError(f"Unknown score_func string: {score_func}.")
+            raise ConfigurationError(
+                f"Unknown score_func: '{score_func}'. "
+                f"Expected one of: 'f_classif', 'chi2', 'mutual_info_classif', or a callable."
+            )
     else:
         func = score_func
         

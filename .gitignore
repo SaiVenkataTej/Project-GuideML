@@ -155,36 +155,4 @@ run_debug.py
 verify_imports.py
 
 # Codebase_parts
-codebase_part1
-codebase_part2
-codebase_part3
-codebase_part4
-codebase_part5
-codebase_part6
-codebase_part7
-codebase_part8
-codebase_part9
-codebase_part10
-codebase_part11
-codebase_part12
-codebase_part13
-codebase_part14
-codebase_part15
-codebase_part16
-codebase_part17
-codebase_part18
-codebase_part19
-codebase_part20
-codebase_part21
-codebase_part22
-codebase_part23
-codebase_part24
-codebase_part25
-codebase_part26
-codebase_part27
-codebase_part28
-codebase_part29
-codebase_part30
-codebase_part31
-codebase_part32
-codebase_part33
+codebase_part_*.md

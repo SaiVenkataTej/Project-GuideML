@@ -13,6 +13,7 @@ import optuna
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,
     get_one_hot_encoder,
@@ -27,6 +28,7 @@ from core_recommender.evaluation import (
 
 # Import centralized logger
 from core_recommender.logger import get_logger
+from core_recommender.exceptions import DataValidationError
 logger = get_logger(__name__)
 
 # --- DEFAULT CONFIGURATION ---
@@ -49,6 +51,7 @@ CONFIG = {
 # RandomForestModel Class
 # =========================================================================
 
+@register_model(task='both')
 class RandomForestModel(BaseModel):
     """A concrete implementation of Random Forest for both Classification and Regression.
     
@@ -85,7 +88,7 @@ class RandomForestModel(BaseModel):
 
         if pd.api.types.is_float_dtype(y):
             self.is_classification = False
-        elif pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or pd.api.types.is_categorical_dtype(y):
+        elif pd.api.types.is_object_dtype(y) or pd.api.types.is_bool_dtype(y) or isinstance(y.dtype, pd.CategoricalDtype):
             self.is_classification = True
         elif pd.api.types.is_integer_dtype(y):
              # Heuristic: < 20 unique values = Classification
@@ -115,7 +118,10 @@ class RandomForestModel(BaseModel):
         
         if pd.isna(y).any():
             logger.error(f"[{self.name}] Target variable contains {pd.isna(y).sum()} NaN values")
-            raise ValueError("Target variable 'y' contains missing values.")
+            raise DataValidationError(
+                "Target variable contains NaN values. Handle missing targets before training.",
+                column='y'
+            )
 
         self._infer_task_type(y)
         
@@ -333,16 +339,29 @@ class RandomForestModel(BaseModel):
             'oob_score': get_oob_score(final_model)
         }
 
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Retrieves the Mean Decrease in Impurity (MDI)."""
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """Random-Forest-specific diagnostics.
+
+        Returns:
+            Dict[str, Any]:
+                * ``feature_importances_mdi`` — Mean Decrease in Impurity scores
+                  (array length = number of selected features).
+                * ``oob_score``              — Out-of-Bag generalisation estimate
+                  (float, or ``None`` if unavailable).
+        """
         if self.best_estimator is None:
             return {}
-            
+
         final_model = self.best_estimator.named_steps['model']
-        if hasattr(final_model, 'feature_importances_'):
-             return {'importances': final_model.feature_importances_.tolist()}
-        return {}
-    
+        return {
+            'feature_importances_mdi': (
+                final_model.feature_importances_.tolist()
+                if hasattr(final_model, 'feature_importances_')
+                else []
+            ),
+            'oob_score': get_oob_score(final_model),
+        }
+
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """
         Extracts and describes the final tuned hyperparameters of the Random Forest.

@@ -12,6 +12,7 @@ import optuna
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,
     get_one_hot_encoder,
@@ -47,6 +48,7 @@ CONFIG = {
 # SVMModel Class
 # =========================================================================
 
+@register_model(task='both')
 class SVMModel(BaseModel):
     """A concrete implementation of Support Vector Machines (SVM) for Classification and Regression.
     
@@ -302,18 +304,43 @@ class SVMModel(BaseModel):
 
         return data
     
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Retrieves Coefficients for Linear SVM."""
-        if self.best_estimator is None: 
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """SVM-specific diagnostics.
+
+        Returns:
+            Dict[str, Any]:
+                * ``support_vectors``  — The training examples that lie on or
+                  within the margin (the most influential data points).
+                * ``n_support``        — Number of support vectors per class
+                  (classification only).
+                * ``coefficients``     — Linear SVM decision weights (only
+                  available when ``kernel == 'linear'``).
+        """
+        if self.best_estimator is None:
             return {}
-            
+
         final_model = self.best_estimator.named_steps['model']
-        if getattr(final_model, 'kernel', '') == 'linear':
-            if hasattr(final_model, 'coef_'):
-                 coefs = final_model.coef_
-                 if coefs.ndim > 1: coefs = coefs[0] # Take first class vs rest for multiclass or just ravel
-                 return {'importances': coefs.tolist()}
-        return {}
+        diagnostics: Dict[str, Any] = {
+            'support_vectors': (
+                final_model.support_vectors_.tolist()
+                if hasattr(final_model, 'support_vectors_')
+                else None
+            ),
+            'n_support': (
+                final_model.n_support_.tolist()
+                if hasattr(final_model, 'n_support_')
+                else None
+            ),
+        }
+
+        # Linear kernel → expose coefficients as a bonus
+        if getattr(final_model, 'kernel', '') == 'linear' and hasattr(final_model, 'coef_'):
+            coefs = final_model.coef_
+            if coefs.ndim > 1:
+                coefs = coefs[0]
+            diagnostics['coefficients'] = coefs.tolist()
+
+        return diagnostics
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """

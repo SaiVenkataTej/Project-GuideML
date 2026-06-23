@@ -5,8 +5,11 @@ from sklearn.metrics import (
     accuracy_score, f1_score, roc_auc_score, 
     precision_score, log_loss, precision_recall_fscore_support
 )
-from typing import Union, List, Optional, Tuple, Literal, Any
+from typing import Union, List, Optional, Tuple, Literal, Any, Dict
 import time
+from core_recommender.logger import get_logger
+
+logger = get_logger(__name__)
 
 # Use npt.ArrayLike for inputs that can be lists/numpy arrays
 ArrayLike = npt.ArrayLike 
@@ -157,7 +160,8 @@ def calculate_roc_auc_score(
     
     try:
         return float(roc_auc_score(y_true_arr, y_score, **kwargs))
-    except ValueError:
+    except ValueError as e:
+        logger.warning(f"ROC AUC calculation failed (falling back to 0.5): {e}")
         # Fallback for edge cases (e.g., only one class present in y_true)
         return 0.5
 
@@ -272,8 +276,8 @@ def measure_prediction_latency(model_instance: Any, X_test: np.ndarray, n_runs: 
     # Warm-up
     try:
         model_instance.predict(X_test[:1])
-    except Exception:
-        pass 
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Latency calculation warm-up failed: {e}")
     
     start_time = time.time()
     for _ in range(n_runs):

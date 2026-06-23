@@ -11,6 +11,7 @@ from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer, 
     get_one_hot_encoder, 
@@ -31,6 +32,7 @@ from core_recommender.evaluation import (
 
 # Import centralized logger
 from core_recommender.logger import get_logger
+from core_recommender.exceptions import DataValidationError
 logger = get_logger(__name__)
 
 # --- DEFAULT CONFIGURATION ---
@@ -47,6 +49,7 @@ CONFIG = {
 # LinearRegressionModel Class
 # =========================================================================
 
+@register_model(task='regression')
 class LinearRegressionModel(BaseModel):
     """A concrete implementation of Linear Regression optimized for Regression tasks.
     
@@ -109,7 +112,10 @@ class LinearRegressionModel(BaseModel):
         # Edge Case: Check for NaNs in target y before proceeding
         if pd.isna(y).any():
             logger.error(f"[{self.name}] Target variable contains {pd.isna(y).sum()} NaN values")
-            raise ValueError("Target variable 'y' contains missing values (NaNs). Please handle missing targets before training.")
+            raise DataValidationError(
+                "Target variable contains NaN values. Handle missing targets before training.",
+                column='y'
+            )
 
         # 1. Scaling Strategy
         scaler_type = self.config.get('scaler', 'standard')
@@ -289,19 +295,29 @@ class LinearRegressionModel(BaseModel):
             'model_name': self.name
         }
 
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """Retrieves feature importance based on model coefficients.
-        
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """Linear-Regression (ElasticNet) specific diagnostics.
+
         Returns:
-            Dict[str, Any]: Dictionary containing list of importances (coefficients).
+            Dict[str, Any]:
+                * ``coefficients`` — ElasticNet feature weights.  Positive
+                  values indicate a positive association with the target;
+                  zero weights indicate features that Lasso regularisation
+                  has effectively removed.
+                * ``l1_ratio``     — The tuned mix between L1 and L2 penalties
+                  (1.0 = pure Lasso, 0.0 \u2248 Ridge).
         """
         if self.best_estimator is None:
             return {}
-            
+
         final_model = self.best_estimator.named_steps['model']
-        if hasattr(final_model, 'coef_'):
-            return {'importances': final_model.coef_.tolist()}
-        return {}
+        if not hasattr(final_model, 'coef_'):
+            return {}
+
+        return {
+            'coefficients': final_model.coef_.tolist(),
+            'l1_ratio': getattr(final_model, 'l1_ratio', None),
+        }
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """

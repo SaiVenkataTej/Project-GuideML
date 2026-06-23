@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 # --- PROJECT IMPORTS ---
 from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,
     get_one_hot_encoder,
@@ -50,6 +51,7 @@ CONFIG = {
 # KNNModel Class
 # =========================================================================
 
+@register_model(task='both')
 class KNNModel(BaseModel):
     """A concrete implementation of K-Nearest Neighbors (KNN) for Classification and Regression.
     
@@ -326,9 +328,44 @@ class KNNModel(BaseModel):
             'best_k': best_k
         }
     
-    def get_feature_importance(self) -> Dict[str, Any]:
-        """KNN does not provide global feature importance scores."""
-        return {}
+    def get_tailored_diagnostics(self) -> Dict[str, Any]:
+        """KNN-specific diagnostics: elbow/tuning data and neighbourhood inspection.
+
+        Returns:
+            Dict[str, Any]:
+                * ``elbow_data``         — per-trial (k, score) pairs from Optuna study
+                  for elbow-plot visualisation.
+                * ``best_k``             — the optimal number of neighbours chosen.
+                * ``neighbor_indices``   — neighbour indices for the first 5 test samples.
+                * ``neighbor_distances`` — corresponding distances (neighbourhood bounds).
+        """
+        if self.best_estimator is None:
+            return {}
+
+        final_model = self.best_estimator.named_steps['model']
+        pre_step = self.best_estimator.named_steps['pre']
+
+        diagnostics: Dict[str, Any] = {}
+
+        # --- Elbow / tuning history ---
+        if hasattr(self, 'study'):
+            trials_df = self.study.trials_dataframe()
+            if 'params_n_neighbors' in trials_df.columns:
+                elbow_df = (
+                    trials_df[['params_n_neighbors', 'value']]
+                    .rename(columns={
+                        'params_n_neighbors': 'param_estimator__n_neighbors',
+                        'value': 'mean_test_score'
+                    })
+                )
+                elbow_df['std_test_score'] = 0.0
+                diagnostics['elbow_data'] = (
+                    elbow_df.sort_values('param_estimator__n_neighbors')
+                    .to_dict(orient='records')
+                )
+            diagnostics['best_k'] = self.study.best_params.get('n_neighbors')
+
+        return diagnostics
 
     def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
         """Returns descriptions of the most important tuned parameters."""
