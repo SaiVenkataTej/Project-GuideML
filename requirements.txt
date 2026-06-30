@@ -14,6 +14,7 @@ seaborn
 
 # Local UI/Web Framework (If using Flask for the local server)
 Flask
+markdown
 
 # Statistical utilities (For Q-Q Plots)
 scipy

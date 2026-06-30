@@ -1,4 +1,5 @@
 import os
+import markdown
 import sys
 
 # Windows Fix: Set joblib temp folder to a stable local path to avoid FileNotFoundError during multiprocessing
@@ -332,6 +333,15 @@ def download_model():
     if os.path.exists(model_path):
         return send_from_directory(app.config['MODEL_FOLDER'], 'best_model.pkl', as_attachment=True)
     return jsonify({'error': 'Model not found'}), 404
+
+@app.route('/docs')
+def docs():
+    """Renders the USER_GUIDE.md file as an HTML page."""
+    docs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', 'USER_GUIDE.md'))
+    with open(docs_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    html_content = markdown.markdown(content, extensions=['fenced_code', 'tables'])
+    return render_template('docs.html', content=html_content)
 
 if __name__ == '__main__':
     app.run(debug=True, host='127.0.0.1', port=5000)

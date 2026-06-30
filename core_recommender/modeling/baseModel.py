@@ -46,6 +46,7 @@ class BaseModel(ABC):
         self.name = name
         self.config = config
         self.model: Any = None
+        self.best_estimator: Any = None
         self.metrics: Dict[str, float] = {}
 
     # ---------------------------------------------------------------------
@@ -127,6 +128,14 @@ class BaseModel(ABC):
         * KNN           → ``{'elbow_data': [...], 'neighbor_indices': [...]}``
         * NaiveBayes    → ``{'feature_log_prob': [...]}``
         * SVM           → ``{'support_vectors': [...], 'n_support': [...]}``
+        """
+        return {}
+
+    def get_parameter_descriptions(self) -> Dict[str, Dict[str, str]]:
+        """Returns descriptive dictionary mapping hyperparameter names to their descriptions.
+
+        Returns:
+            Dict[str, Dict[str, str]]: Mapping of parameter name to its details.
         """
         return {}
     
