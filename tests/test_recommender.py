@@ -8,8 +8,8 @@ from sklearn.datasets import make_classification, make_regression
 
 from core_recommender.profiling import DataProfiler
 from core_recommender.visualization import plot_correlation_heatmap, plot_shap_summary
-from core_recommender.modeling.linearRegression import LinearRegressionModel
-from core_recommender.modeling.decisionTrees import DecisionTreeModel
+from core_recommender.modeling.linear_regression import LinearRegressionModel
+from core_recommender.modeling.decision_trees import DecisionTreeModel
 from core_recommender.execution import ModelExecutor
 
 

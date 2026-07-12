@@ -26,15 +26,9 @@ This project demonstrates proficiency in standard software and ML engineering co
 * `interface/`: Web application interface.
 * `scripts/`: Utility scripts and demos.
 * `docs/`: Project documentation.
-    * `USER_GUIDE.md`: For new users.
-    * `ML_THEORY.md`: For understanding the ML concepts.
-    * `FRONTEND_GUIDE.md`: For understanding the Web UI.
-    * `CODEBASE_WALKTHROUGH.md`: For developers.
-    * `WORKFLOWS.md`: For architects.
-    * `API_REFERENCE.md`: For API details.
-    * `TEAM_ROLES.md`: Team structure overview.
+    * `docs.md`: Consolidated canonical technical documentation (User Guide, ML Theory, Frontend Guide, Codebase Walkthrough, Workflows, Team Roles, and Update Log).
     * `Techniques.md`: Full breakdown of techniques used per model.
-    * `UPDATE_LOG.md`: Changelog of documentation and architectural updates.
+    * `API_REFERENCE.md`: API specifications for developers.
 * `logs/`: System logs.
 * `data/`: Datasets.
 * `tests/`: Unit tests (Implemented: checks model pipelines, profiling, visualization, and execution).
@@ -43,15 +37,9 @@ This project demonstrates proficiency in standard software and ML engineering co
 
 We have created detailed guides for every type of user:
 
-*   **[User Guide](docs/USER_GUIDE.md)**: 🚀 Start here! How to install and run the app.
-*   **[ML Theory](docs/ML_THEORY.md)**: 🧠 Explanation of the machine learning models used.
-*   **[Techniques](docs/Techniques.md)**: 🔬 Full breakdown of every preprocessing, tuning, and evaluation technique used per model.
-*   **[Frontend Guide](docs/FRONTEND_GUIDE.md)**: 🎨 How the HTML, CSS, and JS work together.
-*   **[Codebase Walkthrough](docs/CODEBASE_WALKTHROUGH.md)**: 🏗️ A map of the actual project architecture and data flow.
-*   **[Workflows](docs/WORKFLOWS.md)**: ⚙️ Deep dive into logic, pipelines, and edge cases.
+*   **[Canonical Technical Documentation](docs/docs.md)**: 🚀 Start here! Includes User Guide, ML Theory, Frontend architecture, Codebase walkthrough, Workflows, Team roles, and Update log.
+*   **[Techniques Guide](docs/Techniques.md)**: 🔬 Full breakdown of every preprocessing, tuning, and evaluation technique used per model.
 *   **[API Reference](docs/API_REFERENCE.md)**: 📚 Technical specifications for every function and route.
-*   **[Team Roles](docs/TEAM_ROLES.md)**: 🏢 What a full enterprise team around this project would look like.
-*   **[Update Log](docs/UPDATE_LOG.md)**: 📝 Changelog of documentation and architectural updates.
 
 ---
 

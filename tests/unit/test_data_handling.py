@@ -1,5 +1,5 @@
 """
-Unit Tests — core_recommender/dataHandling.py
+Unit Tests — core_recommender/data_handling.py
 =============================================
 Tests every public function:
   apply_one_hot_encoder, apply_ordinal_encoder, apply_label_encoder_target
@@ -8,7 +8,7 @@ Tests every public function:
 import unittest
 import numpy as np
 import pandas as pd
-from core_recommender.dataHandling import (
+from core_recommender.data_handling import (
     apply_one_hot_encoder,
     apply_ordinal_encoder,
     apply_label_encoder_target,

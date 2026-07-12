@@ -11,7 +11,7 @@ from sklearn.preprocessing import LabelEncoder
 
 # --- PROJECT IMPORTS ---
 from core_recommender.logger import get_logger
-from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.base_model import BaseModel
 from core_recommender.exceptions import (
     DataValidationError,
     InsufficientDataError,
@@ -25,12 +25,12 @@ from core_recommender.exceptions import (
 # when a new model is added.
 from core_recommender.modeling.registry import get_registered_models
 import core_recommender.modeling.knn                # noqa: F401 — triggers registration
-import core_recommender.modeling.linearRegression   # noqa: F401
-import core_recommender.modeling.logisticRegression # noqa: F401
-import core_recommender.modeling.randomForest       # noqa: F401
-import core_recommender.modeling.decisionTrees      # noqa: F401
+import core_recommender.modeling.linear_regression   # noqa: F401
+import core_recommender.modeling.logistic_regression # noqa: F401
+import core_recommender.modeling.random_forest       # noqa: F401
+import core_recommender.modeling.decision_trees      # noqa: F401
 import core_recommender.modeling.svms               # noqa: F401
-import core_recommender.modeling.naiveBayes         # noqa: F401
+import core_recommender.modeling.naive_bayes         # noqa: F401
 
 from core_recommender.profiling import DataProfiler
 from .visualization import plot_shap_summary

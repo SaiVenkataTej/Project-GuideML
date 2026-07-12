@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Type, TYPE_CHECKING
 from core_recommender.exceptions import RegistryError
 
 if TYPE_CHECKING:
-    from core_recommender.modeling.baseModel import BaseModel
+    from core_recommender.modeling.base_model import BaseModel
 
 # ---------------------------------------------------------------------------
 # Internal registry store

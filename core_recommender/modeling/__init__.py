@@ -17,17 +17,17 @@ Available Models:
 """
 
 # Base Class
-from .baseModel import BaseModel
+from .base_model import BaseModel
 
 # Classification & Regression Models
 from .knn import KNNModel
 from .svms import SVMModel
-from .decisionTrees import DecisionTreeModel
-from .linearRegression import LinearRegressionModel
-from .logisticRegression import LogisticRegressionModel
-from .randomForest import RandomForestModel
-from .naiveBayes import NaiveBayesModel
+from .decision_trees import DecisionTreeModel
+from .linear_regression import LinearRegressionModel
+from .logistic_regression import LogisticRegressionModel
+from .random_forest import RandomForestModel
+from .naive_bayes import NaiveBayesModel
 
 # Unsupervised Models
-from .PCA import PCAModel
+from .pca import PCAModel
 

@@ -69,7 +69,6 @@ def process():
     
     # 3. Parse selected models
     selected_models = request.form.getlist('models')
-    print(f"DEBUG: Raw 'models' from form: {selected_models}") # Debug print
     
     if selected_models:
         # Flatten any comma-separated values
@@ -336,8 +335,8 @@ def download_model():
 
 @app.route('/docs')
 def docs():
-    """Renders the USER_GUIDE.md file as an HTML page."""
-    docs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', 'USER_GUIDE.md'))
+    """Renders the docs.md file as an HTML page."""
+    docs_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'docs', 'docs.md'))
     with open(docs_path, 'r', encoding='utf-8') as f:
         content = f.read()
     html_content = markdown.markdown(content, extensions=['fenced_code', 'tables'])

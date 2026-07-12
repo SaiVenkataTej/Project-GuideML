@@ -15,7 +15,7 @@ from core_recommender.logger import get_logger
 logger = get_logger(__name__)
 
 # --- PROJECT IMPORTS ---
-from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.base_model import BaseModel
 from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,

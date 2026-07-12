@@ -10,7 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.base import clone
 
 # --- PROJECT IMPORTS ---
-from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.base_model import BaseModel
 from core_recommender.modeling.registry import register_model
 from core_recommender.preprocessing import (
     get_imputer,

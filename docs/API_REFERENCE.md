@@ -25,7 +25,7 @@ This document provides detailed technical specifications for every Python file i
 *   **`get_one_hot_encoder(handle_unknown='ignore')`**: Returns a robust OHE for categorical data.
 *   **`get_standard_scaler()`**: Returns a Z-score normalizer.
 
-### `dataHandling.py`
+### `data_handling.py`
 **Module: Encoding Utilities**
 *   **`apply_one_hot_encoder(data, drop_first=False)`**: Applies OHE to a DataFrame and returns a *new* DataFrame with proper column names.
 *   **`apply_ordinal_encoder(data, categories='auto')`**: Encodes ordinal features (Low < Med < High).
@@ -75,7 +75,7 @@ This document provides detailed technical specifications for every Python file i
 
 ## 2. Models (`core_recommender/modeling/`)
 
-### `baseModel.py`
+### `base_model.py`
 **Class: `BaseModel` (Abstract Base Class)**
 *   **All models inherit from this.**
 *   **`fit(X, y)`**: Matches sklearn API.
@@ -86,13 +86,13 @@ This document provides detailed technical specifications for every Python file i
 ### Specific Implementations
 Each of these files contains a class inheriting from `BaseModel`, implementing the specific algorithm logic:
 *   **`knn.py`**: `KNNModel` (K-Nearest Neighbors).
-*   **`linearRegression.py`**: `LinearRegressionModel`.
-*   **`logisticRegression.py`**: `LogisticRegressionModel`.
-*   **`decisionTrees.py`**: `DecisionTreeModel`.
-*   **`randomForest.py`**: `RandomForestModel`.
+*   **`linear_regression.py`**: `LinearRegressionModel`.
+*   **`logistic_regression.py`**: `LogisticRegressionModel`.
+*   **`decision_trees.py`**: `DecisionTreeModel`.
+*   **`random_forest.py`**: `RandomForestModel`.
 *   **`svms.py`**: `SVMModel` (Support Vector Machine).
-*   **`naiveBayes.py`**: `NaiveBayesModel` (GaussianNB).
-*   **`PCA.py`**: Wrapper for dimensionality reduction steps.
+*   **`naive_bayes.py`**: `NaiveBayesModel` (GaussianNB).
+*   **`pca.py`**: Wrapper for dimensionality reduction steps.
 
 ---
 

@@ -7,7 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 
 # --- PROJECT IMPORTS ---
-from core_recommender.modeling.baseModel import BaseModel
+from core_recommender.modeling.base_model import BaseModel
 from core_recommender.preprocessing import (
     get_imputer,
     get_standard_scaler

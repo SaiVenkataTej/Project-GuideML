@@ -5,7 +5,7 @@ from typing import Literal, Dict, Any, Union, List
 from collections.abc import Collection
 
 # =========================================================================
-# 🧺 data_handling_functions.py: Modular Data Preparation (F1, F3)
+# 🧺 data_handling.py: Modular Data Preparation (F1, F3)
 # 
 # Contains reusable functions strictly for Encoding.
 # Splitting, Imputation, and Scaling are handled externally.

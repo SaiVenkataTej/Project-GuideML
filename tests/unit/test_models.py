@@ -24,13 +24,12 @@ import numpy as np
 import pandas as pd
 from sklearn.datasets import make_classification, make_regression
 
-# ---- Model imports ----
-from core_recommender.modeling.linearRegression import LinearRegressionModel
-from core_recommender.modeling.logisticRegression import LogisticRegressionModel
-from core_recommender.modeling.decisionTrees import DecisionTreeModel
-from core_recommender.modeling.randomForest import RandomForestModel
+from core_recommender.modeling.linear_regression import LinearRegressionModel
+from core_recommender.modeling.logistic_regression import LogisticRegressionModel
+from core_recommender.modeling.decision_trees import DecisionTreeModel
+from core_recommender.modeling.random_forest import RandomForestModel
 from core_recommender.modeling.knn import KNNModel
-from core_recommender.modeling.naiveBayes import NaiveBayesModel
+from core_recommender.modeling.naive_bayes import NaiveBayesModel
 from core_recommender.modeling.svms import SVMModel
 from core_recommender.exceptions import DataValidationError, ModelNotFittedError
 
