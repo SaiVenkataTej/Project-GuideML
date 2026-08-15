@@ -5,7 +5,7 @@ numpy
 # Machine Learning Core
 scikit-learn
 
-# Concurrency and Model Serialization (Crucial for F6, F7)
+# Model Serialization
 joblib>=1.3.0
 
 # Visualization Libraries (For F9, F10: Heatmap, ROC, Confusion Matrix)
@@ -19,3 +19,6 @@ markdown
 # Statistical utilities (For Q-Q Plots)
 scipy
 optuna
+
+# Explainability
+shap

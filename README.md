@@ -1,25 +1,25 @@
 # GuideML (Building)
 We are in the phase of working and building with AI applications. We use the AI & ML models unknowingly for our daily purpose; it’s become an integral part of us.
 
-To bridge the gap between complex ML knowledge and practical use, we are implementing a Model Recommender application that simplifies the initial model selection process for users with tabular data. This application serves as a local, high-performance platform designed to execute an automated, standardized Machine Learning pipeline. 
+To bridge the gap between complex ML knowledge and practical use, we are implementing a Model Recommender application that simplifies the initial model selection process for users with tabular data. This application serves as a local platform designed to execute an automated, standardized Machine Learning pipeline. 
 
-The goal is to provide users with easy access to evaluate basic ML models based on their datasets, allowing them to get their best models from us without needing specialized coding knowledge. This project emphasizes architectural rigor (modular, OOP design) and performance optimization (concurrency) to deliver fast, validated results and a clear diagnostic report.
+The goal is to provide users with easy access to evaluate basic ML models based on their datasets, allowing them to get their best models from us without needing specialized coding knowledge. This project emphasizes architectural rigor (modular, OOP design) and intelligent optimization (Bayesian hyperparameter search) to deliver validated results and a clear diagnostic report.
 
 ## Purpose
-This project is a high-performance, single-session local application that automates the initial phases of the Machine Learning lifecycle. It is engineered with a focus on speed, architecture, and advanced diagnostics, serving as a powerful tool for quickly identifying the best-performing traditional ML model for a given dataset.
+This project is a single-session, local application that automates the initial phases of the Machine Learning lifecycle. It is engineered with a focus on **software architecture** and **diagnostic depth**, serving as a practical tool for quickly identifying the best-performing traditional ML model for a given tabular dataset.
 
-The core strength of the application lies in its **Modular, Object-Oriented design** and its use of **Bayesian Hyperparameter Optimization (Optuna)** to efficiently tune models — replacing the brute-force approach of GridSearchCV with intelligent search that finds optimal parameters in significantly less time.
+The core strength of the application lies in its **Modular, Object-Oriented design** and its use of **Bayesian Hyperparameter Optimization (Optuna)** to efficiently tune models — replacing the brute-force approach of GridSearchCV with intelligent TPE-sampled search that finds optimal parameters in fewer evaluations.
+
+> **Current Limitation:** Model training is **sequential** (one model at a time) and Flask routing is **synchronous**. This means long training runs will block the browser session until completion. Parallel execution (`n_jobs`) is planned for a future version.
 
 ## Technical Highlights (What You'll Find Inside)
 
 This project demonstrates proficiency in standard software and ML engineering concepts:
 
-* **Architecture (OOP):** Implements a core package (`core_recommender/`) decoupled from the UI. All models inherit from a **`BaseModel` abstract class** with customizable `preprocess()` and `evaluate()` methods.
-* **Optimization:** Includes logic for **Bayesian Hyperparameter Optimization** (Optuna) with cross-validation.
-* **Intelligent Profiling:** Basic heuristic profiling to generate warnings for dataset dimensionality, sparsity, and linearity.
-* **Diagnostics:** Generates crucial diagnostic visualizations (SHAP, ROC, Residuals) using non-interactive Matplotlib backends.
-
-*Note: The current architecture utilizes sequential processing for model training and relies on synchronous Flask routing, meaning long training times will block the active browser session.*
+* **Architecture (OOP):** Implements a core package (`core_recommender/`) decoupled from the UI. All models inherit from a **`BaseModel` abstract class** that enforces a standard contract via four abstract methods: `preprocess()`, `fit()`, `calculate_metrics()`, and `get_diagnostic_data()`.
+* **Optimization:** Includes logic for **Bayesian Hyperparameter Optimization** (Optuna, TPE sampler) with cross-validation, applied automatically to the best-ranked model.
+* **Intelligent Profiling:** Heuristic profiling generates warnings for dataset dimensionality, sparsity, and linearity, plus automated leakage detection (correlation, mathematical identity, and categorical 1:1 mapping checks).
+* **Diagnostics:** Generates diagnostic visualizations (SHAP summary, ROC curve, Confusion Matrix, Residual plots, Feature Importance) using non-interactive Matplotlib backends.
 
 ## Directory Structure
 * `core_recommender/`: Main package source code.
@@ -61,7 +61,7 @@ To maintain a manageable scope and ensure timely completion, the following featu
 * **Deep Learning Models (S1):** No integration of TensorFlow, PyTorch, or Neural Networks.
 * **Cloud Deployment/Live Hosting (S7):** The application is strictly a **local application** designed to run on a user's machine.
 * **Multi-User Management (S4):** No user accounts, registration, or authentication.
-* **Advanced Feature Engineering (S2):** Preprocessing is limited to basic scaling and encoding; no custom feature creation or advanced outlier removal.
+* **Advanced Feature Engineering (S2):** Preprocessing is limited to standard scaling and one-hot encoding. Outlier removal applies only a basic IQR filter on the target variable (regression only); no feature-level outlier handling or custom feature creation.
 
 ---
 

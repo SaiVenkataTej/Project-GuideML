@@ -92,8 +92,8 @@ label.x-small, .text-muted {
 /* Glassmorphism Components */
 .glass-card {
     background: var(--bg-glass);
-    backdrop-filter: var(--backdrop-blur);
     -webkit-backdrop-filter: var(--backdrop-blur);
+    backdrop-filter: var(--backdrop-blur);
     border: var(--glass-border);
     border-radius: 1.5rem;
     box-shadow: var(--shadow-lg);
@@ -223,6 +223,7 @@ label.x-small, .text-muted {
 /* Dashboard Sidebar & Core */
 .dashboard-sidebar {
     background: rgba(18, 20, 33, 0.6);
+    -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255, 255, 255, 0.05);
     height: 100vh;
@@ -273,6 +274,7 @@ label.x-small, .text-muted {
 
 .progress-premium .bar {
     height: 100%;
+    width: var(--bar-width, 0%);
     background: var(--gradient-primary);
     box-shadow: 0 0 10px var(--primary-glow);
     border-radius: 10px;
@@ -295,6 +297,7 @@ label.x-small, .text-muted {
 /* Navbar */
 .nav-blur {
     background: rgba(8, 9, 15, 0.7) !important;
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -379,6 +382,76 @@ label.x-small, .text-muted {
     0% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.3); opacity: 0.5; }
     100% { transform: scale(1); opacity: 1; }
+}
+
+/* Custom utility and layout classes to replace inline HTML styles */
+.hero-description {
+    max-width: 580px;
+    font-weight: 300;
+}
+
+.window-dot {
+    width: 8px;
+    height: 8px;
+}
+
+#loadingOverlay {
+    background: rgba(8, 9, 15, 0.98);
+    z-index: 9999;
+    -webkit-backdrop-filter: blur(15px);
+    backdrop-filter: blur(15px);
+}
+
+.loading-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.loading-spinner {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-width: 0.2rem;
+}
+
+.loading-col-step {
+    width: 70%;
+}
+
+.loading-col-status {
+    width: 30%;
+}
+
+/* Dashboard-specific helper and utility classes */
+.col-width-60 {
+    width: 60px;
+}
+
+.glass-card-header {
+    --bs-bg-opacity: 0.02 !important;
+}
+
+.param-card {
+    --bs-bg-opacity: 0.02 !important;
+}
+
+.img-interpretability {
+    max-height: 450px;
+}
+
+.img-profile-chart {
+    height: 400px;
+    width: 100%;
+    object-fit: contain;
+}
+
+.log-container {
+    max-height: 550px;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.log-container::-webkit-scrollbar {
+    display: none;
 }
 
 

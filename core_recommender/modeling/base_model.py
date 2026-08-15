@@ -36,12 +36,13 @@ class BaseModel(ABC):
         metrics (Dict[str, float]): Dictionary of computed performance metrics.
     """
     
-    def __init__(self, name: str, config: Dict[str, Any]) -> None:
+    def __init__(self, name: str, config: Dict[str, Any], **kwargs) -> None:
         """Initializes the base model with a name and configuration.
 
         Args:
             name (str): A unique identifier for the model.
             config (Dict[str, Any]): A dictionary containing configuration parameters.
+            **kwargs: Additional keyword arguments ignored by the base model.
         """
         self.name = name
         self.config = config

@@ -25,19 +25,24 @@
         </div>
 
         <div class="nav flex-column nav-pills gap-2" id="v-pills-tab" role="tablist" aria-orientation="vertical">
-            <button class="nav-link active text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-overview-tab" data-bs-toggle="pill" data-bs-target="#v-pills-overview" type="button" role="tab">
+            <button class="nav-link active text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-overview-tab"
+                data-bs-toggle="pill" data-bs-target="#v-pills-overview" type="button" role="tab">
                 <i class="fas fa-chart-pie me-3 opacity-50"></i> Overview
             </button>
-            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-diagnostics-tab" data-bs-toggle="pill" data-bs-target="#v-pills-diagnostics" type="button" role="tab">
+            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-diagnostics-tab"
+                data-bs-toggle="pill" data-bs-target="#v-pills-diagnostics" type="button" role="tab">
                 <i class="fas fa-microscope me-3 opacity-50"></i> Diagnostics
             </button>
-            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-explain-tab" data-bs-toggle="pill" data-bs-target="#v-pills-explain" type="button" role="tab">
+            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-explain-tab"
+                data-bs-toggle="pill" data-bs-target="#v-pills-explain" type="button" role="tab">
                 <i class="fas fa-key me-3 opacity-50"></i> Explainability
             </button>
-            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-data-tab" data-bs-toggle="pill" data-bs-target="#v-pills-data" type="button" role="tab">
+            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-data-tab"
+                data-bs-toggle="pill" data-bs-target="#v-pills-data" type="button" role="tab">
                 <i class="fas fa-database me-3 opacity-50"></i> Data Profile
             </button>
-            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-logs-tab" data-bs-toggle="pill" data-bs-target="#v-pills-logs" type="button" role="tab">
+            <button class="nav-link text-start py-3 px-4 rounded-3 border-0 transition" id="v-pills-logs-tab"
+                data-bs-toggle="pill" data-bs-target="#v-pills-logs" type="button" role="tab">
                 <i class="fas fa-terminal me-3 opacity-50"></i> Logs
             </button>
         </div>
@@ -55,7 +60,8 @@
                 <p class="text-muted small ls-1">SESSION ID: #{{ range(1000, 9999) | random }}</p>
             </div>
             <div class="d-flex gap-3">
-                <a href="/" class="btn btn-outline-light border-white border-opacity-10 rounded-3 px-4 py-2 small fw-bold">
+                <a href="/"
+                    class="btn btn-outline-light border-white border-opacity-10 rounded-3 px-4 py-2 small fw-bold">
                     <i class="fas fa-plus me-2"></i>New Run
                 </a>
                 <a href="/download_model" class="btn btn-primary px-4 py-2 small fw-bold">
@@ -65,10 +71,11 @@
         </header>
 
         <div class="tab-content" id="v-pills-tabContent">
-            
+
             <!-- TAB: OVERVIEW -->
             <div class="tab-pane fade show active" id="v-pills-overview" role="tabpanel">
-                <div class="glass-card p-3 rounded-4 bg-primary bg-opacity-05 border-primary border-opacity-10 mb-4 fade-in-up">
+                <div
+                    class="glass-card p-3 rounded-4 bg-primary bg-opacity-05 border-primary border-opacity-10 mb-4 fade-in-up">
                     <p class="x-small text-muted mb-1 ls-1">CURRENT TASK</p>
                     <p class="fw-bold text-white mb-0 h5">{{ results.summary.task }}</p>
                 </div>
@@ -79,21 +86,24 @@
                             <p class="x-small text-muted fw-bold ls-wide mb-3">ELITE MODEL</p>
                             <h3 class="text-gradient mb-0">{{ results.summary.best_model }}</h3>
                             <div class="mt-3">
-                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20 px-2 py-1 x-small rounded-pill">STABLE</span>
+                                <span
+                                    class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20 px-2 py-1 x-small rounded-pill">STABLE</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4 fade-in-up delay-200">
                         <div class="glass-card p-4 h-100">
-                            <p class="x-small text-muted fw-bold ls-wide mb-3 text-uppercase">{{ results.summary.primary_metric }}</p>
-                            <h1 class="display-5 fw-bold text-white mb-0">{{ "%.4f"|format(results.summary.score or 0.0) }}</h1>
+                            <p class="x-small text-muted fw-bold ls-wide mb-3 text-uppercase">{{
+                                results.summary.primary_metric }}</p>
+                            <h1 class="display-5 fw-bold text-white mb-0">{{ "%.4f"|format(results.summary.score or 0.0)
+                                }}</h1>
                         </div>
                     </div>
                     {% if results.summary.description %}
                     <div class="col-md-4 fade-in-up delay-300">
                         <div class="glass-card p-4 h-100 bg-primary bg-opacity-05">
                             <p class="x-small text-primary fw-bold ls-wide mb-2 text-uppercase">Insight</p>
-                            <p class="small text-white-50 mb-0" style="line-height: 1.5;">
+                            <p class="small text-white-50 mb-0 lh-base">
                                 {{ results.summary.description.story }}
                             </p>
                         </div>
@@ -111,7 +121,7 @@
                             <table class="table-premium">
                                 <thead>
                                     <tr>
-                                        <th class="ps-3" style="width: 60px;">#</th>
+                                        <th class="ps-3 col-width-60">#</th>
                                         <th class="text-muted">MODEL ARCHITECTURE</th>
                                         <th class="text-muted">PRIMARY METRIC</th>
                                         <th class="text-end pe-3 text-muted">STATUS</th>
@@ -125,7 +135,9 @@
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <span class="fw-bold {{ 'text-primary' if res.model == results.summary.best_model else 'text-white' }}">{{ res.model }}</span>
+                                                <span
+                                                    class="fw-bold {{ 'text-primary' if res.model == results.summary.best_model else 'text-white' }}">{{
+                                                    res.model }}</span>
                                                 {% if res.model == results.summary.best_model %}
                                                 <i class="fas fa-crown text-warning ms-2 x-small"></i>
                                                 {% endif %}
@@ -133,20 +145,23 @@
                                         </td>
                                         <td>
                                             {% if res.status == 'success' %}
-                                                {% set score = res.metrics.get(results.summary.primary_metric, 0) %}
-                                                {% set bar_width = (score * 100) if results.summary.task == 'CLASSIFICATION' else 100 %}
-                                                <div class="d-flex align-items-center gap-3">
-                                                    <div class="progress-premium flex-grow-1">
-                                                        <div class="bar" style="width: {{ bar_width }}%"></div>
-                                                    </div>
-                                                    <span class="fw-bold small text-white">{{ "%.4f"|format(score) }}</span>
+                                            {% set score = res.metrics.get(results.summary.primary_metric, 0) %}
+                                            {% set bar_width = (score * 100) if results.summary.task == 'CLASSIFICATION'
+                                            else 100 %}
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="progress-premium flex-grow-1">
+                                                    <div class="bar" data-width="{{ bar_width }}%"></div>
                                                 </div>
+                                                <span class="fw-bold small text-white">{{ "%.4f"|format(score) }}</span>
+                                            </div>
                                             {% else %}
-                                                <span class="text-danger x-small"><i class="fas fa-triangle-exclamation me-1"></i> FAILED</span>
+                                            <span class="text-danger x-small"><i
+                                                    class="fas fa-triangle-exclamation me-1"></i> FAILED</span>
                                             {% endif %}
                                         </td>
                                         <td class="text-end pe-3">
-                                            <i class="fas {{ 'fa-circle-check text-success' if res.status == 'success' else 'fa-circle-xmark text-danger' }} opacity-75"></i>
+                                            <i
+                                                class="fas {{ 'fa-circle-check text-success' if res.status == 'success' else 'fa-circle-xmark text-danger' }} opacity-75"></i>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -162,28 +177,36 @@
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="glass-card p-0">
-                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
-                                <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Area Under ROC" if results.summary.task == 'CLASSIFICATION' else "Residual Distribution" }}</h6>
+                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white glass-card-header">
+                                <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Area Under ROC" if
+                                    results.summary.task == 'CLASSIFICATION' else "Residual Distribution" }}</h6>
                             </div>
                             <div class="p-4 text-center">
                                 {% if results.images.diagnostics_1 %}
-                                <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}" class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05">
+                                <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_1.split('/')[-1]) }}"
+                                    class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05"
+                                    alt="{{ 'Area Under ROC curve' if results.summary.task == 'CLASSIFICATION' else 'Residual Distribution plot' }}">
                                 {% else %}
-                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic plot unavailable.</div>
+                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic
+                                    plot unavailable.</div>
                                 {% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="glass-card p-0">
-                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
-                                <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Confusion Matrix" if results.summary.task == 'CLASSIFICATION' else "Prediction Precision" }}</h6>
+                            <div class="p-3 border-bottom border-white border-opacity-05 bg-white glass-card-header">
+                                <h6 class="mb-0 small fw-bold ls-1 text-uppercase text-white">{{ "Confusion Matrix" if
+                                    results.summary.task == 'CLASSIFICATION' else "Prediction Precision" }}</h6>
                             </div>
                             <div class="p-4 text-center">
                                 {% if results.images.diagnostics_2 %}
-                                <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}" class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05">
+                                <img src="{{ url_for('static', filename='images/' + results.images.diagnostics_2.split('/')[-1]) }}"
+                                    class="img-fluid rounded-4 shadow-lg border border-white border-opacity-05"
+                                    alt="{{ 'Confusion Matrix' if results.summary.task == 'CLASSIFICATION' else 'Prediction Precision scatter plot' }}">
                                 {% else %}
-                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic plot unavailable.</div>
+                                <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Diagnostic
+                                    plot unavailable.</div>
                                 {% endif %}
                             </div>
                         </div>
@@ -194,14 +217,17 @@
             <!-- TAB: EXPLAINABILITY -->
             <div class="tab-pane fade" id="v-pills-explain" role="tabpanel">
                 <div class="glass-card p-0 mb-4">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
+                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white glass-card-header">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">Weight Analysis (Feature Importance)</h6>
                     </div>
                     <div class="p-4 text-center">
                         {% if results.images.importance %}
-                        <img src="{{ url_for('static', filename='images/' + results.images.importance) }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 450px;">
+                        <img src="{{ url_for('static', filename='images/' + results.images.importance) }}"
+                            class="img-fluid rounded-4 shadow-lg img-interpretability"
+                            alt="Feature Importance weights analysis bar chart">
                         {% else %}
-                        <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Weights not interpretable for this architecture.</div>
+                        <div class="py-5 text-muted opacity-50"><i class="fas fa-ghost me-2"></i> Weights not
+                            interpretable for this architecture.</div>
                         {% endif %}
                     </div>
                 </div>
@@ -211,7 +237,7 @@
                     <div class="row g-3">
                         {% for p_name, p_info in results.explainability.parameters.items() %}
                         <div class="col-md-4">
-                            <div class="p-3 rounded-4 bg-white border border-white border-opacity-05" style="--bs-bg-opacity: .02;">
+                            <div class="p-3 rounded-4 bg-white border border-white border-opacity-05 param-card">
                                 <p class="x-small text-muted fw-bold mb-1 text-uppercase">{{ p_name }}</p>
                                 <p class="h5 fw-bold text-primary mb-1">{{ p_info.value }}</p>
                                 <p class="x-small text-white-50 mb-0 opacity-75">{{ p_info.desc }}</p>
@@ -222,14 +248,17 @@
                 </div>
 
                 <div class="glass-card p-0">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white" style="--bs-bg-opacity: .02;">
+                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white glass-card-header">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">SHAP Global Influence Analysis</h6>
                     </div>
                     <div class="p-4 text-center">
                         {% if results.images.shap %}
-                        <img src="{{ url_for('static', filename='images/shap_summary.png') }}" class="img-fluid rounded-4 shadow-lg" style="max-height: 450px;">
+                        <img src="{{ url_for('static', filename='images/shap_summary.png') }}"
+                            class="img-fluid rounded-4 shadow-lg img-interpretability"
+                            alt="SHAP global feature influence analysis chart">
                         {% else %}
-                        <div class="py-5 text-muted opacity-50"><i class="fas fa-microchip me-2"></i> SHAP analysis generating or currently unavailable.</div>
+                        <div class="py-5 text-muted opacity-50"><i class="fas fa-microchip me-2"></i> SHAP analysis
+                            generating or currently unavailable.</div>
                         {% endif %}
                     </div>
                 </div>
@@ -241,13 +270,17 @@
                     <div class="col-lg-6">
                         <div class="glass-card p-4">
                             <h6 class="mb-4 small fw-bold ls-1 text-uppercase">Cross-Feature Correlation</h6>
-                            <img src="{{ url_for('static', filename='images/heatmap.png') }}" class="img-fluid rounded-4 shadow-lg" style="height: 400px; width: 100%; object-fit: contain;">
+                            <img src="{{ url_for('static', filename='images/heatmap.png') }}"
+                                class="img-fluid rounded-4 shadow-lg img-profile-chart"
+                                alt="Cross-feature correlation matrix heatmap">
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="glass-card p-4">
                             <h6 class="mb-4 small fw-bold ls-1 text-uppercase">Frequency Spectrums</h6>
-                            <img src="{{ url_for('static', filename='images/histograms.png') }}" class="img-fluid rounded-4 shadow-lg" style="height: 400px; width: 100%; object-fit: contain;">
+                            <img src="{{ url_for('static', filename='images/histograms.png') }}"
+                                class="img-fluid rounded-4 shadow-lg img-profile-chart"
+                                alt="Feature frequency spectrum distribution histograms">
                         </div>
                     </div>
                 </div>
@@ -256,11 +289,12 @@
             <!-- TAB: LOGS -->
             <div class="tab-pane fade" id="v-pills-logs" role="tabpanel">
                 <div class="glass-card border-primary border-opacity-20">
-                    <div class="p-3 border-bottom border-white border-opacity-05 bg-white d-flex justify-content-between align-items-center" style="--bs-bg-opacity: .02;">
+                    <div
+                        class="p-3 border-bottom border-white border-opacity-05 bg-white d-flex justify-content-between align-items-center glass-card-header">
                         <h6 class="mb-0 small fw-bold ls-1 text-uppercase">System Execution Log</h6>
                         <span class="badge bg-primary bg-opacity-10 text-primary x-small">LIVE</span>
                     </div>
-                    <div class="card-body bg-black bg-opacity-40 p-0" style="max-height: 550px; overflow-y: auto; scrollbar-width: none;">
+                    <div class="card-body bg-black bg-opacity-40 p-0 log-container">
                         <div class="p-4 font-monospace small">
                             {% for step in results.best_model.pipeline_log %}
                             <div class="mb-2 d-flex">
@@ -281,6 +315,12 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Set dynamic progress bar widths from data attributes to avoid inline style linter warnings
+        document.querySelectorAll('.bar[data-width]').forEach(el => {
+            el.style.setProperty('--bar-width', el.getAttribute('data-width'));
+        });
+    </script>
 </body>
 
-</html>
+</html>
