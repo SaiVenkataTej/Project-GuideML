@@ -87,18 +87,67 @@ document.addEventListener('DOMContentLoaded', function() {
         return result;
     }
 
-    // Form Intercept
-    form?.addEventListener('submit', function() {
+    // Form Intercept for Asynchronous Non-Blocking Processing
+    form?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const file = fileInput?.files?.[0];
+        const targetVal = targetSelect?.value;
+        const checkedModels = document.querySelectorAll('input[name="models"]:checked');
+
+        if (!file) {
+            showNotification('Please select a CSV file first.', 'error');
+            return;
+        }
+        if (!targetVal) {
+            showNotification('Please select an objective prediction target.', 'error');
+            return;
+        }
+        if (checkedModels.length === 0) {
+            showNotification('Please select at least one model architecture.', 'error');
+            return;
+        }
+
+        // Show loading overlay and initialize dynamic table
         loadingOverlay.classList.remove('d-none');
-        startEngineOrchestration();
+        initializeOrchestrationTable();
+
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch('/process', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `Server returned error (${response.status})`);
+            }
+
+            const data = await response.json();
+            const jobId = data.job_id;
+            
+            // Poll for completion
+            pollJobStatus(jobId);
+
+        } catch (err) {
+            loadingOverlay.classList.add('d-none');
+            showNotification(err.message, 'error');
+        }
     });
 
-    // Advanced "Story" Table Sequence
-    function startEngineOrchestration() {
-        const sequences = [
-            { id: 'data', t: "Establishing data link...", icon: "fa-link" },
-            { id: 'import', t: "Injecting CSV stream & profiling...", icon: "fa-file-import" },
-            { id: 'nulls', t: "Preprocessing & leakage detection...", icon: "fa-filter" }
+    let currentStepList = [];
+
+    // Dynamically build the loading table based on selected models
+    function initializeOrchestrationTable() {
+        currentStepList = [
+            { id: 'ingest', match: 'ingest', t: "Ingesting dataset stream...", icon: "fa-file-import" },
+            { id: 'eda', match: 'generating', t: "Feature correlation & spectrum analysis...", icon: "fa-chart-network" },
+            { id: 'config', match: 'configuring', t: "Configuring model architectures...", icon: "fa-sliders" }
         ];
 
         // Collect all checked models dynamically
@@ -106,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedModelNames = [];
         selectedCheckboxes.forEach(cb => {
             cb.value.split(',').forEach(m => {
-                const trimmed = m.trim();
+                const trimmed = m.strip ? m.strip() : m.trim();
                 if (trimmed && !selectedModelNames.includes(trimmed)) {
                     selectedModelNames.push(trimmed);
                 }
@@ -115,24 +164,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (selectedModelNames.length > 0) {
             selectedModelNames.forEach((name, i) => {
-                sequences.push({
+                currentStepList.push({
                     id: `model_${i}`,
+                    match: name.toLowerCase(),
                     t: `Training ${name}...`,
                     icon: "fa-microchip"
                 });
             });
         } else {
-            sequences.push({ id: 'model_generic', t: "Training selected architectures...", icon: "fa-microchip" });
+            currentStepList.push({ id: 'model_generic', match: 'training', t: "Training candidate models...", icon: "fa-microchip" });
         }
 
-        sequences.push(
-            { id: 'eval', t: "Cross-validation & SHAP explainability...", icon: "fa-gauge-high" },
-            { id: 'sync', t: "Ranking leaderboard & diagnostic sync...", icon: "fa-trophy" }
+        currentStepList.push(
+            { id: 'diag', match: 'rendering', t: "Model diagnostics & SHAP explainability...", icon: "fa-gauge-high" },
+            { id: 'export', match: 'exporting', t: "Ranking leaderboard & model export...", icon: "fa-trophy" }
         );
 
-        // Initialize table
         storyContainer.innerHTML = '';
-        sequences.forEach(s => {
+        currentStepList.forEach(s => {
             const tr = document.createElement('tr');
             tr.id = `step-${s.id}`;
             tr.innerHTML = `
@@ -149,19 +198,67 @@ document.addEventListener('DOMContentLoaded', function() {
             storyContainer.appendChild(tr);
         });
 
-        let idx = 0;
-        const interval = setInterval(() => {
-            if (idx > 0) {
-                updateStep(sequences[idx-1].id, 'complete');
+        // Activate first step
+        updateStep(currentStepList[0].id, 'active');
+    }
+
+    // Real-time backend status poller
+    function pollJobStatus(jobId) {
+        const pollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/job_status/${jobId}`);
+                if (!res.ok) {
+                    clearInterval(pollInterval);
+                    loadingOverlay.classList.add('d-none');
+                    showNotification("Job status check failed. Please refresh.", "error");
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.status === 'running') {
+                    handleStepProgress(data.step);
+                } else if (data.status === 'completed') {
+                    clearInterval(pollInterval);
+                    markAllComplete();
+                    setTimeout(() => {
+                        window.location.href = `/dashboard?job_id=${jobId}`;
+                    }, 400);
+                } else if (data.status === 'failed') {
+                    clearInterval(pollInterval);
+                    loadingOverlay.classList.add('d-none');
+                    showNotification(data.error || "Pipeline execution failed.", "error");
+                }
+            } catch (pollErr) {
+                console.warn("Poll connection retry:", pollErr);
             }
-            
-            if (idx < sequences.length) {
-                updateStep(sequences[idx].id, 'active');
-                idx++;
-            } else {
-                clearInterval(interval);
+        }, 800);
+    }
+
+    function handleStepProgress(stepMessage) {
+        if (!stepMessage) return;
+        const lowerMsg = stepMessage.toLowerCase();
+        let matchedIdx = -1;
+
+        for (let i = 0; i < currentStepList.length; i++) {
+            if (lowerMsg.includes(currentStepList[i].match)) {
+                matchedIdx = i;
+                break;
             }
-        }, 1200);
+        }
+
+        if (matchedIdx !== -1) {
+            for (let i = 0; i < matchedIdx; i++) {
+                updateStep(currentStepList[i].id, 'complete');
+            }
+            updateStep(currentStepList[matchedIdx].id, 'active');
+        }
+    }
+
+    function markAllComplete() {
+        currentStepList.forEach(s => {
+            updateStep(s.id, 'complete');
+        });
     }
 
     function updateStep(id, state) {
@@ -186,8 +283,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showNotification(msg, type) {
-        // Simple fallback alert for now, could be a premium toast later
-        alert(`${type.toUpperCase()}: ${msg}`);
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : 'warning'} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-4 shadow-lg`;
+        alertDiv.style.zIndex = '99999';
+        alertDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-triangle-exclamation me-2"></i>
+                <div class="small fw-semibold">${msg}</div>
+                <button type="button" class="btn-close ms-3" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 6000);
     }
 });
 

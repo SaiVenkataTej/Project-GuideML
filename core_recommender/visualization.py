@@ -356,10 +356,10 @@ def plot_shap_summary(model: Any, X: pd.DataFrame, model_name: str, save_path: s
         return
 
     try:
-        # Performance Guard: Sample data for speed if the dataset is large.
+        # Performance & Memory Guard: Sample data for speed and low RAM footprint.
         # SHAP calculation can be computationally expensive (especially Kernel/Permutation).
-        if len(X) > 200:
-            X_sample = X.sample(200, random_state=42)
+        if len(X) > 50:
+            X_sample = X.sample(50, random_state=42)
         else:
             X_sample = X
             
