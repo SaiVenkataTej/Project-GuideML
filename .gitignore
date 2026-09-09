@@ -124,7 +124,7 @@ data/
 *.parquet
 *.feather
 
-# ML Model Artifacts
+# ML Model Artifacts (generated at runtime)
 *.pkl
 *.pickle
 *.joblib
@@ -133,15 +133,19 @@ data/
 *.pth
 *.onnx
 *.model
+!interface/static/models/.gitkeep
 
-# Visualizations
+# Visualizations (generated at runtime — ignore contents but keep folder structure)
 *.png
 *.jpg
 *.jpeg
 *.svg
 *.pdf
 plots/
-images/
+# Keep static asset folders tracked (only ignore contents)
+!interface/static/images/.gitkeep
+!interface/static/models/.gitkeep
+!interface/static/uploads/.gitkeep
 
 # Application Logs
 guideml.log

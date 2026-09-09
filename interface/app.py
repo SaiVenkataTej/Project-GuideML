@@ -26,11 +26,15 @@ from core_recommender.visualization import (
 )
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey_dev_only' # Required for flash messages
+app.secret_key = os.environ.get('SECRET_KEY', 'supersecretkey_dev_only')  # Set SECRET_KEY env var in production
 
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 app.config['IMAGE_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'images')
 app.config['MODEL_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'models')
+
+# Ensure required directories exist at runtime
+for folder in [app.config['UPLOAD_FOLDER'], app.config['IMAGE_FOLDER'], app.config['MODEL_FOLDER']]:
+    os.makedirs(folder, exist_ok=True)
  
 # Global to store the latest results for the dashboard
 LAST_RESULTS = None
@@ -343,4 +347,6 @@ def docs():
     return render_template('docs.html', content=html_content)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV', 'production') != 'production'
+    app.run(debug=debug, host='0.0.0.0', port=port)
