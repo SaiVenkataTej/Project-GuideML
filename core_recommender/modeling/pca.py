@@ -1,3 +1,16 @@
+"""
+pca.py — Experimental PCA wrapper (NOT registered in the model registry)
+
+STATUS: Experimental / Unused in production pipeline.
+
+This module implements a PCA-based dimensionality reduction wrapper that follows
+the BaseModel interface. It is NOT decorated with @register_model and is therefore
+NOT included in ModelExecutor's training runs.
+
+If you wish to enable it, add the @register_model(task='both') decorator above
+the class definition AND import this module in execution.py alongside the other
+model imports.
+"""
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional, List

@@ -6,9 +6,15 @@ from collections.abc import Collection
 
 # =========================================================================
 # 🧺 data_handling.py: Modular Data Preparation (F1, F3)
-# 
+#
 # Contains reusable functions strictly for Encoding.
 # Splitting, Imputation, and Scaling are handled externally.
+#
+# NOTE: These functions are standalone utilities intended for direct use
+# in notebooks, scripts, and unit tests.  The main execution pipeline
+# (ModelExecutor in execution.py) uses sklearn ColumnTransformer/Pipeline
+# internally and does NOT call these helpers.  They are kept here as
+# convenience wrappers and to satisfy the project's functional requirements.
 # =========================================================================
 
 # --- 1. Feature Encoding Functions (Categorical Features) ---

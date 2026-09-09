@@ -136,9 +136,9 @@
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <span
-                                                    class="fw-bold {{ 'text-primary' if res.model == results.summary.best_model else 'text-white' }}">{{
-                                                    res.model }}</span>
-                                                {% if res.model == results.summary.best_model %}
+                                                    class="fw-bold {{ 'text-primary' if (res.name or res.model) == results.summary.best_model else 'text-white' }}">{{
+                                                    res.name or res.model }}</span>
+                                                {% if (res.name or res.model) == results.summary.best_model %}
                                                 <i class="fas fa-crown text-warning ms-2 x-small"></i>
                                                 {% endif %}
                                             </div>

@@ -97,14 +97,38 @@ document.addEventListener('DOMContentLoaded', function() {
     function startEngineOrchestration() {
         const sequences = [
             { id: 'data', t: "Establishing data link...", icon: "fa-link" },
-            { id: 'import', t: "Injecting CSV stream...", icon: "fa-file-import" },
-            { id: 'nulls', t: "Heuristic null scanning...", icon: "fa-filter" },
-            { id: 'corr', t: "Correlation matrix calc...", icon: "fa-chart-network" },
-            { id: 'rf', t: "Random Forest assembly...", icon: "fa-microchip" },
-            { id: 'svm', t: "SVM hyperplane search...", icon: "fa-vector-square" },
-            { id: 'roc', t: "ROC/AUC benchmarking...", icon: "fa-gauge-high" },
-            { id: 'sync', t: "Diagnostic sync...", icon: "fa-sync" }
+            { id: 'import', t: "Injecting CSV stream & profiling...", icon: "fa-file-import" },
+            { id: 'nulls', t: "Preprocessing & leakage detection...", icon: "fa-filter" }
         ];
+
+        // Collect all checked models dynamically
+        const selectedCheckboxes = document.querySelectorAll('input[name="models"]:checked');
+        const selectedModelNames = [];
+        selectedCheckboxes.forEach(cb => {
+            cb.value.split(',').forEach(m => {
+                const trimmed = m.trim();
+                if (trimmed && !selectedModelNames.includes(trimmed)) {
+                    selectedModelNames.push(trimmed);
+                }
+            });
+        });
+
+        if (selectedModelNames.length > 0) {
+            selectedModelNames.forEach((name, i) => {
+                sequences.push({
+                    id: `model_${i}`,
+                    t: `Training ${name}...`,
+                    icon: "fa-microchip"
+                });
+            });
+        } else {
+            sequences.push({ id: 'model_generic', t: "Training selected architectures...", icon: "fa-microchip" });
+        }
+
+        sequences.push(
+            { id: 'eval', t: "Cross-validation & SHAP explainability...", icon: "fa-gauge-high" },
+            { id: 'sync', t: "Ranking leaderboard & diagnostic sync...", icon: "fa-trophy" }
+        );
 
         // Initialize table
         storyContainer.innerHTML = '';

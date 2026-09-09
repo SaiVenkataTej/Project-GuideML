@@ -164,14 +164,18 @@ class ModelExecutor:
                 leaky_features.append(str(feature))
 
         # 2. Mathematical Identity Check (A * B = Target)
+        # Guard: O(n²) — skip for wide datasets to avoid timeouts.
         candidates = [c for c in numeric_df.columns if c != target_column]
-        for i, col1 in enumerate(candidates):
-            for col2 in candidates[i+1:]:
-                prod = numeric_df[col1] * numeric_df[col2]
-                if np.allclose(prod, numeric_df[target_column], rtol=1e-5, atol=1e-8):
-                    logger.warning(f"⚠️ Identity detected: {target_column} == {col1} * {col2}")
-                    if col1 not in leaky_features: leaky_features.append(col1)
-                    if col2 not in leaky_features: leaky_features.append(col2)
+        if len(candidates) <= 30:
+            for i, col1 in enumerate(candidates):
+                for col2 in candidates[i+1:]:
+                    prod = numeric_df[col1] * numeric_df[col2]
+                    if np.allclose(prod, numeric_df[target_column], rtol=1e-5, atol=1e-8):
+                        logger.warning(f"⚠️ Identity detected: {target_column} == {col1} * {col2}")
+                        if col1 not in leaky_features: leaky_features.append(col1)
+                        if col2 not in leaky_features: leaky_features.append(col2)
+        else:
+            logger.info(f"⏭️ Identity check skipped ({len(candidates)} columns > 30 threshold — performance guard).")
 
         # 3. Categorical/Object Leakage Check
         # Check if any non-numeric column has suspiciously low entropy or mirrors the target
@@ -394,8 +398,9 @@ class ModelExecutor:
                 
         return feature_names
 
-    def run(self, df: pd.DataFrame, target_column: str, progress_callback: Optional[Callable] = None, 
-            include_models: Optional[List[str]] = None) -> Dict[str, Any]:
+    def run(self, df: pd.DataFrame, target_column: str, progress_callback: Optional[Callable] = None,
+            include_models: Optional[List[str]] = None,
+            shap_output_path: Optional[str] = None) -> Dict[str, Any]:
         """Executes the full AutoML pipeline.
 
         Args:
@@ -496,8 +501,15 @@ class ModelExecutor:
             y = pd.Series(y_encoded, index=y.index)
             self._log_step("Target Encoding", f"Encoded classes: {list(self.label_encoder.classes_)}", "fas fa-list")
         else:
-            # For regression, ensure float
-            y = pd.to_numeric(y, errors='coerce').fillna(0) # Simple fill check, ideally handled by outlier logic pre-step
+            # For regression, ensure float and reject rows with unresolvable NaN targets
+            y = pd.to_numeric(y, errors='coerce')
+            nan_count = y.isna().sum()
+            if nan_count > 0:
+                raise DataValidationError(
+                    f"Target column '{target_column}' contains {nan_count} NaN value(s) that could not be resolved. "
+                    "Please clean your dataset before uploading.",
+                    column=target_column
+                )
 
         # 6. Train/Test Split
         stratify = y if inferred_task == 'classification' else None
@@ -523,12 +535,14 @@ class ModelExecutor:
         results_list = []
         n_models = len(models)
         for i, model in enumerate(models):
-            # Callback adapter
-            def sub_step_callback(local_p, msg):
+            logger.info(f"⏳ [{i+1}/{n_models}] Training {model.name}...")
+            # Callback adapter — _i=i captures the current value of i by value,
+            # preventing the Python closure late-binding bug.
+            def sub_step_callback(local_p, msg, _i=i):
                 if progress_callback:
                     # Map local 0-100 to global slice
                     # Global slice for training is approx 10% to 90%
-                    base = 10 + (i / n_models) * 80
+                    base = 10 + (_i / n_models) * 80
                     span = 80 / n_models
                     global_p = int(base + (span * (local_p / 100)))
                     progress_callback(global_p, msg)
@@ -559,7 +573,9 @@ class ModelExecutor:
         valid_results = [r for r in results_list if r['status'] == 'success']
         
         if not valid_results:
-            raise RuntimeError("All models failed to train.")
+            raise PipelineError(
+                "All models failed to train. Check the logs for individual model errors."
+            )
 
         # 9. Ranking
         if inferred_task == 'classification':
@@ -606,31 +622,33 @@ class ModelExecutor:
         tailored_diagnostics = self.best_model_instance.get_tailored_diagnostics()
         
         # 12. Modular SHAP (Explainability Layer)
-        # This section generates global feature impact plots using SHAP values.
-        try:
-            # Deterministic path for the SHAP artifact to be consumed by the Flask frontend.
-            shap_path = os.path.join('interface', 'static', 'images', 'shap_summary.png')
-            
-            # Robustness: Ensure the directory structure exists (especially important for fresh clones).
-            if not os.path.exists(os.path.dirname(shap_path)):
-                os.makedirs(os.path.dirname(shap_path), exist_ok=True)
-                
-            # Convert test data back to a labeled DataFrame for better SHAP plot annotations.
-            # Using the preprocessed test data so the shapes and dimensions match the model expectations.
-            X_test_proc, _ = best_run['test_data_proc']
-            if X_test_proc.shape[1] == len(feature_names):
-                X_test_df = pd.DataFrame(X_test_proc, columns=feature_names)
-            else:
-                cols = feature_names[:X_test_proc.shape[1]] if X_test_proc.shape[1] < len(feature_names) else [f"feature_{i}" for i in range(X_test_proc.shape[1])]
-                X_test_df = pd.DataFrame(X_test_proc, columns=cols)
-            
-            # Generate the visualization. 
-            # Note: We pass the underlying 'best_estimator' if it's wrapped in a Pipeline.
-            plot_shap_summary(self.best_model_instance.best_estimator, X_test_df, self.best_model_name, shap_path)
-            logger.info("✅ SHAP Summary Plot generated successfully.")
-        except Exception as e:
-            # SHAP is a value-added feature; we log the failure but do not halt the entire pipeline.
-            logger.warning(f"⚠️ SHAP generation skipped: {str(e)}", exc_info=True)
+        # shap_output_path is injected by the caller (app.py) so this library module
+        # never needs to know about the Flask folder structure.
+        if shap_output_path:
+            try:
+                # Ensure the output directory exists.
+                os.makedirs(os.path.dirname(shap_output_path), exist_ok=True)
+
+                # Convert test data back to a labeled DataFrame for better SHAP plot annotations.
+                # Using the preprocessed test data so the shapes and dimensions match the model expectations.
+                X_test_proc, _ = best_run['test_data_proc']
+                if X_test_proc.shape[1] == len(feature_names):
+                    X_test_df = pd.DataFrame(X_test_proc, columns=feature_names)
+                else:
+                    cols = (feature_names[:X_test_proc.shape[1]]
+                            if X_test_proc.shape[1] < len(feature_names)
+                            else [f"feature_{i}" for i in range(X_test_proc.shape[1])])
+                    X_test_df = pd.DataFrame(X_test_proc, columns=cols)
+
+                # Generate the visualization.
+                # Note: We pass the underlying 'best_estimator' if it's wrapped in a Pipeline.
+                plot_shap_summary(self.best_model_instance.best_estimator, X_test_df, self.best_model_name, shap_output_path)
+                logger.info("✅ SHAP Summary Plot generated successfully.")
+            except Exception as e:
+                # SHAP is a value-added feature; we log the failure but do not halt the entire pipeline.
+                logger.warning(f"⚠️ SHAP generation skipped: {str(e)}", exc_info=True)
+        else:
+            logger.info("⏭️ SHAP generation skipped (no output path provided).")
 
         # 13. Construct Comprehensive Final Result Summary
         summary = {
@@ -639,12 +657,12 @@ class ModelExecutor:
             'classes': list(self.label_encoder.classes_) if self.label_encoder else None,
             'leaderboard': [
                 {
-                    'model': r['model_name'], 
-                    'name': r['model_name'], 
+                    'name': r['model_name'],
+                    'model': r['model_name'],
                     'metrics': r.get('metrics', {}),
                     'status': r['status'],
                     'error': r.get('error')
-                } 
+                }
                 for r in self.results
             ],
             'best_model': {

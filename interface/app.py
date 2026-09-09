@@ -1,4 +1,5 @@
 import os
+import uuid
 import markdown
 import sys
 
@@ -9,7 +10,7 @@ os.environ['JOBLIB_TEMP_FOLDER'] = JOBLIB_TEMP
 
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, flash
+from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, flash, session
 import joblib
 from typing import Dict, Any, List, Optional
 
@@ -35,9 +36,15 @@ app.config['MODEL_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', '
 # Ensure required directories exist at runtime
 for folder in [app.config['UPLOAD_FOLDER'], app.config['IMAGE_FOLDER'], app.config['MODEL_FOLDER']]:
     os.makedirs(folder, exist_ok=True)
- 
-# Global to store the latest results for the dashboard
-LAST_RESULTS = None
+
+# Per-request result store keyed by session UUID.
+# Replaces the global LAST_RESULTS variable which caused race conditions
+# when multiple users (or Gunicorn workers) hit /process concurrently.
+RESULT_STORE: dict = {}
+MAX_STORE_SIZE = 20   # evict oldest entries to cap memory usage
+
+# Maximum allowed CSV upload size (50 MB)
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 # --- Routes ---
 
@@ -49,7 +56,6 @@ def home():
 @app.route('/process', methods=['POST'])
 def process():
     """Processes the uploaded CSV and runs the AutoML pipeline synchronously."""
-    global LAST_RESULTS
     
     # 1. Validate file upload
     if 'file' not in request.files:
@@ -63,6 +69,14 @@ def process():
     
     if not file.filename.endswith('.csv'):
         flash('Error: Only CSV files are allowed', 'danger')
+        return redirect('/')
+
+    # File size guard — reject uploads over 50 MB before saving to disk.
+    file.seek(0, 2)                   # seek to end
+    file_size = file.tell()
+    file.seek(0)                      # rewind
+    if file_size > MAX_UPLOAD_BYTES:
+        flash(f'Error: File too large ({file_size // (1024*1024)} MB). Maximum allowed size is 50 MB.', 'danger')
         return redirect('/')
     
     # 2. Get target column
@@ -124,7 +138,12 @@ def process():
         
         # 7. Run ModelExecutor
         executor = ModelExecutor(random_state=42)
-        results = executor.run(df, target_column, include_models=selected_models)
+        shap_path = os.path.join(app.config['IMAGE_FOLDER'], 'shap_summary.png')
+        results = executor.run(
+            df, target_column,
+            include_models=selected_models,
+            shap_output_path=shap_path
+        )
         
         # 8. Generate diagnostic plots
         task_type = results['task_type']
@@ -216,9 +235,15 @@ def process():
         if executor.best_model_instance:
             executor.best_model_instance.export(model_path)
         
-        # 10. Store results globally
-        LAST_RESULTS = results
-        
+        # 10. Store results under a unique key for this user's session
+        result_id = str(uuid.uuid4())
+        session['result_id'] = result_id
+        # Evict oldest entries if the store is too large
+        if len(RESULT_STORE) >= MAX_STORE_SIZE:
+            oldest_key = next(iter(RESULT_STORE))
+            del RESULT_STORE[oldest_key]
+        RESULT_STORE[result_id] = results
+
         # 11. Redirect to dashboard
         return redirect('/dashboard')
     
@@ -246,11 +271,11 @@ def process():
 @app.route('/dashboard')
 def dashboard():
     """Displays the results dashboard."""
-    if not LAST_RESULTS:
+    result_id = session.get('result_id')
+    if not result_id or result_id not in RESULT_STORE:
         return redirect('/')
-    
-    results = LAST_RESULTS
-    
+
+    results = RESULT_STORE[result_id]
     # Prepare leaderboard
     leaderboard = results.get('leaderboard', [])
     
