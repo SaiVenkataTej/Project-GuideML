@@ -21,4 +21,5 @@ scipy
 optuna
 
 # Explainability
-shap
+shap
+gunicorn

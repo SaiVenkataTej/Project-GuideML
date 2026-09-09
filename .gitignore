@@ -156,3 +156,8 @@ verify_imports.py
 
 # Codebase_parts
 codebase_part_*.md
+
+uml_generator/
+
+pack_code.py
+
